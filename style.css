@@ -7,6 +7,7 @@ body {
     font-weight: normal;
     font-style: normal;
 
+    color-scheme: dark; /* We need to toggle this based on the user's preference in shadertoy settings */
     color: light-dark(#333b3c, #efefec);
-    background-color: light-dark(#efedea, #223a2c);
+    background-color: light-dark(#efedea, #112233);
 }
