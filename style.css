@@ -26,6 +26,9 @@ body {
 
 .innerBox > * {
     margin: .5rem;
+    display: flex;
+    justify-content: left;
+    align-content: space-between;
 }
 
 button {
