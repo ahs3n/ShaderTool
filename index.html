@@ -24,12 +24,21 @@
         <p>|&lt || iTime XX.X fps</p>
       </div>
       <div class="innerBox">
-        <p>> Advanced</p>
-        <p>> Export</p>
-        <button>
-          Something
-        </button>
+        <p class="dropdownSelector">> Advanced</p>
+        <p class="dropdownSelector">> Export</p>
+        <div class="innerBox">
+          <button>
+            Something
+          </button>
+        </div>
       </div>
     </div>
+
+    <script>
+      var canvas = document.getElementById("canvas");
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "blue";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    </script>
   </body>
 </HTML>
