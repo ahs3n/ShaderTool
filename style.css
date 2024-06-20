@@ -8,6 +8,24 @@ body {
     font-style: normal;
 
     color-scheme: dark; /* We need to toggle this based on the user's preference in shadertoy settings */
-    color: light-dark(#333b3c, #efefec);
-    background-color: light-dark(#efedea, #112233);
+    color: light-dark(#333b3c, #efedea);
+    background-color: light-dark(#efedea, #333b3c);
+}
+
+.innerBox, .outerBox {
+    padding: .5rem;
+}
+
+.outerBox {
+    border-radius: 1rem;
+    background-color: light-dark(#efedea, #3d4647);
+}
+
+.innerBox {
+    border-radius: .5rem;
+}
+
+button {
+    border-radius: .2rem;
+
 }
