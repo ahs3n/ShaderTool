@@ -14,11 +14,12 @@ body {
 
 .outerBox {
     border-radius: 1rem;
-    padding: .5rem;
+    padding: 0px;
     background-color: light-dark(#efedea, #3d4647);
 }
 
 .innerBox {
+    margin: .5rem;
     border-radius: .5rem;
     background-color: light-dark(#efedea, #333b3c);
 
@@ -27,6 +28,7 @@ body {
 .innerBox > * {
     margin: .5rem;
     display: flex;
+    flex-direction: row;
     justify-content: left;
     align-content: space-between;
 }
