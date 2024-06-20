@@ -12,12 +12,9 @@ body {
     background-color: light-dark(#efedea, #333b3c);
 }
 
-.innerBox, .outerBox {
-    padding: .5rem;
-}
-
 .outerBox {
     border-radius: 1rem;
+    padding: .5rem;
     background-color: light-dark(#efedea, #3d4647);
 }
 
@@ -25,6 +22,10 @@ body {
     border-radius: .5rem;
     background-color: light-dark(#efedea, #333b3c);
 
+}
+
+.innerBox > * {
+    margin: .5rem;
 }
 
 button {
@@ -36,4 +37,9 @@ button {
 
 button:hover {
     background-color: light-dark(#c9c7c5, #4e595a);
+}
+
+
+#canvas {
+    margin: .5rem, 0px;
 }
