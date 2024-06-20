@@ -23,9 +23,17 @@ body {
 
 .innerBox {
     border-radius: .5rem;
+    background-color: light-dark(#efedea, #333b3c);
+
 }
 
 button {
     border-radius: .2rem;
+    border: 0px;
+    padding: .2rem;
+    background-color: light-dark(#efedea, #3d4647);
+}
 
+button:hover {
+    background-color: light-dark(#c9c7c5, #4e595a);
 }
