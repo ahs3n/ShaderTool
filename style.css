@@ -11,7 +11,7 @@ body {
 
 .outerBox {
     border-radius: 1rem;
-    padding: 0px;
+    padding: .2rem;
     background-color: light-dark(#efedea, #3d4647);
 }
 
@@ -19,15 +19,15 @@ body {
     margin: .5rem;
     border-radius: .5rem;
     background-color: light-dark(#efedea, #333b3c);
+    display: flex;
+    flex-direction: row;
+    justify-content: left;
+    align-content: space-between;
 
 }
 
 .innerBox > * {
     margin: .5rem;
-    display: flex;
-    flex-direction: row;
-    justify-content: left;
-    align-content: space-between;
 }
 
 button {
@@ -46,5 +46,5 @@ button:hover {
 }
 
 #canvas {
-    margin: .5rem, 0px;
+    margin: 0px;
 }
