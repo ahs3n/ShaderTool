@@ -20,7 +20,7 @@ body {
     border-radius: .5rem;
     background-color: light-dark(#efedea, #333b3c);
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     justify-content: left;
     align-content: space-between;
 
