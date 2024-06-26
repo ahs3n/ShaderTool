@@ -11,6 +11,8 @@ body {
 
 .outerBox {
     display: inline-block;
+    width: 100%;
+    height: 100%;
     border-radius: 1rem;
     padding: .2rem;
     background-color: light-dark(#efedea, #3d4647);
@@ -19,6 +21,8 @@ body {
 .innerBox {
     margin: .5rem;
     border-radius: .5rem;
+    width: 100%;
+    height: 100%;
     background-color: light-dark(#efedea, #333b3c);
     display: flex;
     flex-direction: column;
@@ -58,5 +62,6 @@ button:hover {
 }
 
 .codeWindow {
-    
+    width: 100%;
+    padding: 0px .5rem;
 }
