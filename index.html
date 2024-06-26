@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
-    <title>ShaderTool : Home</title>
+    <title>ShaderTool : New</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,26 +15,35 @@
 
   </head>
   <body>
-    <div class="outerBox">
-      <div class="innerBox">
-        <p>
-          800 x 640
-        </p>
-        <canvas id="canvas" width="800" height="640"></canvas>
-        <p>|&lt || iTime XX.X fps</p>
-      </div>
-      <div class="innerBox">
-        <p class="dropdownSelector">> Advanced</p>
+    <div class="content">
+      <div class="outerBox">
         <div class="innerBox">
-          <button>
-            Something
-          </button>
+          <p>
+            800 x 640
+          </p>
+          <canvas id="canvas" width="800" height="640"></canvas>
+          <p>|&lt || iTime XX.X fps</p>
         </div>
         <div class="innerBox">
-          <p class="dropdownSelector">> Export</p>
-          <button>
-            ⟳
-          </button>
+          <p class="dropdownSelector">> Advanced</p>
+          <div class="innerBox">
+            <button>
+              Something
+            </button>
+          </div>
+          <div class="innerBox">
+            <p class="dropdownSelector">> Export</p>
+            <button>
+              ⟳
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="codeWindow">
+        <div class="outerBox">
+          <div class="innerBox">
+            <p>code goes here</p>
+          </div>
         </div>
       </div>
     </div>
@@ -44,6 +53,13 @@
       var ctx = canvas.getContext("2d");
       ctx.fillStyle = "blue";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.beginPath();
+      ctx.arc(canvas.width/2, canvas.height/2, canvas.height/2, 0, 2 * Math.PI, false);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = '#003300';
+      ctx.stroke();
     </script>
   </body>
 </HTML>

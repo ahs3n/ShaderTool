@@ -48,3 +48,13 @@ button:hover {
 #canvas {
     margin: 0px;
 }
+
+.content {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
+
+.codeWindow {
+    
+}
