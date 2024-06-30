@@ -16,6 +16,7 @@ body {
     font-optical-sizing: auto;
     font-weight: normal;
     font-style: normal;
+    padding: .5rem;
 
     color: var(--primary-txt-colour);
     background-color: var(--primary-bg-colour);
@@ -34,9 +35,10 @@ body {
     height: 100%;
     border-radius: 1rem;
     background-color: var(--secondary-bg-colour);
-
+    padding: .5rem;
+    
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     column-gap: .5rem;
     row-gap: .5rem;
 
@@ -47,6 +49,8 @@ body {
     width: 100% - 1rem;
     height: 100% - 1rem;
     background-color: var(--primary-bg-colour);
+    padding: .5rem;
+    
     display: flex;
     flex-direction: column;
     column-gap: .5rem;
