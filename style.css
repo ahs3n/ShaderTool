@@ -126,7 +126,3 @@ p {
     justify-content: space-between;
     flex-direction: row;   
 }
-
-.flexBreak {
-    flex-basis: 100%;
-}
