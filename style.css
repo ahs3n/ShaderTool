@@ -75,13 +75,16 @@ button:hover {
 .optionsBox {
     flex-direction: row;
     justify-content: space-around;
+    flex-wrap: wrap;
 }
 
 #advancedBox {
+    width: 100%;
     display: none;
 }
 
 #exportBox {
+    width: 100%;
     display: none;
 }
 

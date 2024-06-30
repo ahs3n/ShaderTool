@@ -29,12 +29,19 @@
 
         <div class="innerBox optionsBox">
 
+          <a class="dropdownSelector" onclick="let advancedBox = document.getElementById('advancedBox'); advancedBox.style.display = advancedBox.style.display=='none'?'block':'none'">
+            <p>
+              > Advanced
+            </p>
+          </a>
+
+          <a class="dropdownSelector" onclick="let exportBox = document.getElementById('exportBox'); exportBox.style.display = exportBox.style.display=='none'?'block':'none'">
+            <p>
+              > Export
+            </p>
+          </a>
+          
           <div class="innerBox">
-            <a class="dropdownSelector" onclick="let advancedBox = document.getElementById('advancedBox'); advancedBox.style.display = advancedBox.style.display=='none'?'block':'none'">
-              <p>
-                > Advanced
-              </p>
-            </a>
             <div class="innerBox" id="advancedBox">
               <button>
                 ⟳
@@ -43,14 +50,24 @@
           </div>
 
           <div class="innerBox">
-            <a class="dropdownSelector" onclick="let exportBox = document.getElementById('exportBox'); exportBox.style.display = exportBox.style.display=='none'?'block':'none'">
-              <p>
-                > Export
-              </p>
-            </a>
             <div class="innerBox" id="exportBox">
               <button>
                 Something
+              </button>
+              <button>
+                Something else
+              </button>
+              <button>
+                Things!
+              </button>
+              <button>
+                I do nothing
+              </button>
+              <button>
+                I do something
+              </button>
+              <button>
+                Hello!
               </button>
             </div>
           </div>
