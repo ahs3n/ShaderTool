@@ -16,7 +16,6 @@ body {
     font-optical-sizing: auto;
     font-weight: normal;
     font-style: normal;
-    padding: .5rem;
 
     color: var(--primary-txt-colour);
     background-color: var(--primary-bg-colour);
@@ -25,9 +24,9 @@ body {
 .content {
     display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
     column-gap: .5rem;
     row-gap: .5rem;
+    padding: .5rem;
 }
 
 .outerBox {
