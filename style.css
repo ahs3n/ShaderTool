@@ -27,6 +27,7 @@ body {
     column-gap: .5rem;
     row-gap: .5rem;
     padding: .5rem;
+    flex-wrap: wrap;
 }
 
 .outerBox {
@@ -72,10 +73,15 @@ button:hover {
 }
 
 #canvas {
-    margin: 0px;
+    margin: 0px -.5rem;
 }
 
 .codeWindow {
     width: 100%;
     padding: 0px .5rem;
+}
+
+.optionsBox {
+    flex-direction: row;
+    justify-content: space-around;
 }
