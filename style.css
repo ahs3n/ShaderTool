@@ -76,6 +76,15 @@ button:hover {
     transition: background-color 100ms;
 }
 
+select {
+    border-radius: .2rem;
+    border: 0px;
+    padding: .5rem;
+    color: var(--primary-text-colour);
+    background-color: var(--secondary-bg-colour);
+}
+
+
 #canvas {
     margin: 0px -.5rem;
 }
