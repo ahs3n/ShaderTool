@@ -87,6 +87,10 @@ button:hover {
     width: 100%;
 }
 
+.codeBox {
+    height: 100%;
+}
+
 p {
     margin: 0px;
 }
