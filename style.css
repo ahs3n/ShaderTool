@@ -61,7 +61,8 @@ button {
     border-radius: .2rem;
     border: 0px;
     padding: .2rem;
-    background-color: var(--primary-bg-colour);
+    color: var(--primary-text-colour);
+    background-color: var(--secondary-bg-colour);
 }
 
 button:hover {
