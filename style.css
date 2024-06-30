@@ -58,7 +58,7 @@ body {
 button {
     border-radius: .2rem;
     border: 0px;
-    padding: .2rem;
+    padding: .5rem;
     color: var(--primary-text-colour);
     background-color: var(--secondary-bg-colour);
 }
@@ -68,20 +68,23 @@ button:hover {
     transition: background-color 100ms;
 }
 
-.dropdownSelector {
-    display: inline-block;
-}
-
 #canvas {
     margin: 0px -.5rem;
-}
-
-.codeWindow {
-    width: 100%;
-    padding: 0px .5rem;
 }
 
 .optionsBox {
     flex-direction: row;
     justify-content: space-around;
+}
+
+.advancedBox {
+    display: none;
+}
+
+.exportBox {
+    display: none;
+}
+
+p {
+    margin: 0px;
 }
