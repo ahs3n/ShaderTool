@@ -79,13 +79,17 @@ button:hover {
 
 select {
     border-radius: .2rem;
-    border: 0px;
+    border: .1rem;
+    border-color: var(--primary-bg-colour);
     padding: .5rem;
     color: var(--primary-text-colour);
     background-color: var(--secondary-bg-colour);
     display:inline-block;
 }
 
+select:hover {
+    border-color: var(--secondary-txt-colour);
+}
 
 #canvas {
     margin: 0px -.5rem;
@@ -120,6 +124,9 @@ p {
 #shaderInfo {
     display: flex;
     justify-content: space-between;
-    flex-direction: row;
-    
+    flex-direction: row;   
+}
+
+.flexBreak {
+    flex-basis: 100%;
 }
