@@ -77,11 +77,11 @@ button:hover {
     justify-content: space-around;
 }
 
-.advancedBox {
+#advancedBox {
     display: none;
 }
 
-.exportBox {
+#exportBox {
     display: none;
 }
 
