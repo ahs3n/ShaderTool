@@ -30,20 +30,20 @@ body {
 }
 
 .outerBox {
-    display: inline-block;
     border-radius: 1rem;
     background-color: var(--secondary-bg-colour);
     padding: .5rem;
-    
+    max-width: 100vw;
+    min-width: 50rem;
+        
     display: flex;
     flex-direction: column;
     column-gap: .5rem;
     row-gap: .5rem;
-
+    flex: 1;
 }
 
 .innerBox {
-    display: block;
     border-radius: .5rem;
     background-color: var(--primary-bg-colour);
     padding: .5rem;
@@ -73,4 +73,9 @@ button:hover {
 
 #canvas {
     margin: 0px;
+}
+
+.codeWindow {
+    width: 100%;
+    padding: 0px .5rem;
 }
