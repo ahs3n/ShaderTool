@@ -24,8 +24,7 @@ body {
 .content {
     display: flex;
     flex-direction: row;
-    column-gap: .5rem;
-    row-gap: .5rem;
+    gap: .5rem;
     padding: .5rem;
     flex-wrap: wrap;
 }
@@ -39,8 +38,7 @@ body {
         
     display: flex;
     flex-direction: column;
-    column-gap: .5rem;
-    row-gap: .5rem;
+    gap: .5rem;
     flex: 1;
 }
 
@@ -51,8 +49,7 @@ body {
     
     display: flex;
     flex-direction: column;
-    column-gap: .5rem;
-    row-gap: .5rem;
+    gap: .5rem;
 }
 
 button {
