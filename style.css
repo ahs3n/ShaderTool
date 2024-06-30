@@ -1,12 +1,31 @@
+:root {
+    --primary-bg-colour: #333b3c;
+    --secondary-bg-colour: #3d4647;
+    --primary-txt-colour: #efedea;
+    --secondary-txt-colour: #9e9e9e;
+}
+/* 
+We need to toggle dark mode based on the user's preference in shadertoy settings 
+OR 
+store colour theme preferences in a shader on their account 
+*/
+  
+
 body {
     font-family: "JetBrains Mono", monospace;
     font-optical-sizing: auto;
     font-weight: normal;
     font-style: normal;
 
-    color-scheme: dark; /* We need to toggle this based on the user's preference in shadertoy settings */
-    color: light-dark(#333b3c, #efedea);
-    background-color: light-dark(#efedea, #333b3c);
+    color: var(--primary-txt-colour);
+    background-color: var(--primary-bg-colour);
+}
+
+.content {
+    display: flex;
+    flex-direction: row;
+    column-gap: .5rem;
+    row-gap: .5rem;
 }
 
 .outerBox {
@@ -14,36 +33,35 @@ body {
     width: 100%;
     height: 100%;
     border-radius: 1rem;
-    padding: .2rem;
-    background-color: light-dark(#efedea, #3d4647);
+    background-color: var(--secondary-bg-colour);
+
+    display: flex;
+    flex-direction: row;
+    column-gap: .5rem;
+    row-gap: .5rem;
+
 }
 
 .innerBox {
-    margin: .5rem;
     border-radius: .5rem;
     width: 100% - 1rem;
     height: 100% - 1rem;
-    background-color: light-dark(#efedea, #333b3c);
+    background-color: var(--primary-bg-colour);
     display: flex;
     flex-direction: column;
-    justify-content: left;
-    align-content: space-between;
-
-}
-
-.innerBox > * {
-    margin: .5rem;
+    column-gap: .5rem;
+    row-gap: .5rem;
 }
 
 button {
     border-radius: .2rem;
     border: 0px;
     padding: .2rem;
-    background-color: light-dark(#efedea, #3d4647);
+    background-color: var(--primary-bg-colour);
 }
 
 button:hover {
-    background-color: light-dark(#c9c7c5, #4e595a);
+    background-color: var(--secondary-txt-colour);
     transition: background-color 100ms;
 }
 
@@ -53,12 +71,6 @@ button:hover {
 
 #canvas {
     margin: 0px;
-}
-
-.content {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-around;
 }
 
 .codeWindow {
