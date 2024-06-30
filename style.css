@@ -79,13 +79,15 @@ button:hover {
 }
 
 #advancedBox {
-    width: 100%;
     display: none;
 }
 
 #exportBox {
-    width: 100%;
     display: none;
+}
+
+.buttonBox {
+    width: 100%;
 }
 
 p {
