@@ -132,6 +132,10 @@ p {
     margin: 0 .5rem;
 }
 
+#shaderSave > * {
+    margin: 0 .5rem;
+}
+
 a {
     color: var(--primary-theme-colour);
 }
