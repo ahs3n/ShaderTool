@@ -29,13 +29,13 @@
 
         <div class="innerBox optionsBox">
 
-          <a class="dropdownSelector" onclick="let advancedBox = document.getElementById('advancedBox'); advancedBox.style.display = advancedBox.style.display=='none'?'block':'none'; exportBox.style.display='none'">
+          <a class="dropdownSelector" onclick="advancedBox.style.display = advancedBox.style.display=='none'?'block':'none'; exportBox.style.display='none'">
             <p>
               > Advanced
             </p>
           </a>
 
-          <a class="dropdownSelector" onclick="let exportBox = document.getElementById('exportBox'); exportBox.style.display = exportBox.style.display=='none'?'block':'none'; advancedBox.style.display='none';">
+          <a class="dropdownSelector" onclick="exportBox.style.display = exportBox.style.display=='none'?'block':'none'; advancedBox.style.display='none';">
             <p>
               > Export
             </p>
@@ -91,7 +91,7 @@
             Shader description here! Here we can put lots of stuff about the shader but there's a character limit so you have to be careful that your description isn't too long, beca
           </p>
         </div>
-        
+
         <div id="shaderSave">
           <select id="saveMode">
             <option value="private" selected>Private</option>
@@ -117,8 +117,10 @@
     </div>
 
     <script>
-      var canvas = document.getElementById("canvas");
-      var ctx = canvas.getContext("2d");
+      let advancedBox = document.getElementById('advancedBox');
+      let exportBox = document.getElementById('exportBox'); 
+      let canvas = document.getElementById("canvas");
+      let ctx = canvas.getContext("2d");
       ctx.fillStyle = "blue";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.beginPath();
