@@ -4,7 +4,7 @@
     --primary-txt-colour: #eee;
     --secondary-txt-colour: #9e9e9e;
     --primary-theme-colour: #059;
-    --secondary-theme-colour: #359;
+    --secondary-theme-colour: #37B;
 }
 /* 
 We need to toggle dark mode based on the user's preference in shadertoy settings 
@@ -125,4 +125,12 @@ p {
     display: flex;
     justify-content: space-between;
     flex-direction: row;   
+}
+
+a {
+    color: var(--primary-theme-colour);
+}
+
+a:hover {
+    color: var(--secondary-theme-colour);
 }
