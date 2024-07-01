@@ -109,6 +109,10 @@ input:hover {
     border-color: var(--secondary-txt-colour);
 }
 
+input[type=number] {
+    width: 4rem;
+}
+
 
 #canvas {
     margin: 0px -.5rem;
@@ -141,7 +145,9 @@ input:hover {
 }
 
 p {
-    margin: 0px;
+    margin-top: 0;
+    margin-bottom: 0;
+    margin-right: .5rem;
 }
 
 .shaderInfo {
