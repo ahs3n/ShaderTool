@@ -1,10 +1,10 @@
 :root {
-    --primary-bg-colour: #333b3c;
-    --secondary-bg-colour: #3d4647;
-    --primary-txt-colour: #efedea;
+    --primary-bg-colour: #333;
+    --secondary-bg-colour: #444;
+    --primary-txt-colour: #eee;
     --secondary-txt-colour: #9e9e9e;
-    --primary-theme-colour: #002255;
-    --secondary-theme-colour: #335599;
+    --primary-theme-colour: #059;
+    --secondary-theme-colour: #359;
 }
 /* 
 We need to toggle dark mode based on the user's preference in shadertoy settings 
