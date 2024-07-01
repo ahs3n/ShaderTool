@@ -54,6 +54,12 @@ body {
     gap: .5rem;
 }
 
+::placeholder {
+    color: var(--secondary-txt-colour);
+    opacity: 1; /* Firefox */
+}
+  
+
 button {
     border-radius: .2rem;
     border: 0;
@@ -91,6 +97,19 @@ select:hover {
     border-color: var(--secondary-txt-colour);
 }
 
+input {
+    border-radius: .2rem;
+    padding: .5rem;
+    color: var(--primary-text-colour);
+    background-color: var(--secondary-bg-colour);
+    display:inline-block;
+}
+
+input:hover {
+    border-color: var(--secondary-txt-colour);
+}
+
+
 #canvas {
     margin: 0px -.5rem;
 }
@@ -106,6 +125,10 @@ select:hover {
 }
 
 #exportBox {
+    display: none;
+}
+
+#renderBox {
     display: none;
 }
 
