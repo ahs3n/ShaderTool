@@ -3,8 +3,8 @@
     --secondary-bg-colour: #444;
     --primary-txt-colour: #eee;
     --secondary-txt-colour: #9e9e9e;
-    --primary-theme-colour: #059;
-    --secondary-theme-colour: #37B;
+    --primary-theme-colour: #37B;
+    --secondary-theme-colour: #9BF;
 }
 /* 
 We need to toggle dark mode based on the user's preference in shadertoy settings 
