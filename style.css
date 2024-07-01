@@ -123,8 +123,9 @@ p {
 
 #shaderInfo {
     display: flex;
-    justify-content: space-between;
     flex-direction: row;   
+    justify-content: space-between;
+    align-items: center;
 }
 
 a {
