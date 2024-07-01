@@ -56,7 +56,7 @@ body {
 
 button {
     border-radius: .2rem;
-    border: 0px;
+    border: 0;
     padding: .5rem;
     color: var(--primary-text-colour);
     background-color: var(--secondary-bg-colour);
@@ -148,4 +148,9 @@ a:hover {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
+    padding: .2rem;
+}
+
+.inputRow > * {
+    margin: 0;
 }
