@@ -208,4 +208,5 @@ a:hover {
 .breaker {
     width: 100%;
     visibility: hidden;
+    margin: -.5rem;
 }
