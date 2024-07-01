@@ -130,6 +130,7 @@ input[type=number] {
 
 #exportBox {
     display: none;
+    min-width: 25rem;
 }
 
 #exportBox > * {
@@ -148,6 +149,7 @@ p {
     margin-top: 0;
     margin-bottom: 0;
     margin-right: .5rem;
+    margin-left: .5rem;
 }
 
 .shaderInfo {
