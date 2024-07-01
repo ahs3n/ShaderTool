@@ -29,46 +29,50 @@
 
         <div class="innerBox optionsBox">
 
-          <a class="dropdownSelector" onclick="advancedBox.style.display = advancedBox.style.display=='none'?'block':'none'; exportBox.style.display='none'">
+          <a onclick="advancedBox.style.display = advancedBox.style.display=='block'?'none':'block'; exportBox.style.display='none'">
             <p>
               > Advanced
             </p>
           </a>
 
-          <a class="dropdownSelector" onclick="exportBox.style.display = exportBox.style.display=='none'?'block':'none'; advancedBox.style.display='none';">
+          <a onclick="exportBox.style.display = exportBox.style.display=='block'?'none':'block'; advancedBox.style.display='none';">
             <p>
               > Export
             </p>
           </a>
           
-          <div class="innerBox buttonBox">
-            <div class="innerBox" id="advancedBox">
-              <button>
-                ⟳
-              </button>
-            </div>
+          <div id="advancedBox">
+            <button>
+              ⟳
+            </button>
           </div>
 
-          <div class="innerBox buttonBox">
-            <div class="innerBox" id="exportBox">
+          <div id="exportBox">
+            <div class="inputRow">
               <button>
-                Something
+                Export JSON
               </button>
               <button>
-                Something else
+                Import JSON
               </button>
-              <button>
-                Things!
-              </button>
-              <button>
-                I do nothing
-              </button>
-              <button>
-                I do something
-              </button>
-              <button>
-                Hello!
-              </button>
+            </div>
+
+            <div class="outerBox">
+              <a class="dropdownSelector" onclick="renderBox.style.display = renderBox.style.display=='block'?'none':'block';">
+                <p>
+                  > Render
+                </p>
+              </a>
+
+              <div id="renderBox">
+                <div class="inputRow">
+                  <h3>Resolution:</h3>
+                  <input type="text" title="x">
+                  <p>x</p>
+                  <input type="number" title="y">
+                </div>
+              </div>
+              
             </div>
           </div>
 
@@ -119,6 +123,9 @@
     <script>
       let advancedBox = document.getElementById('advancedBox');
       let exportBox = document.getElementById('exportBox'); 
+      let renderBox = document.getElementById('renderBox'); 
+
+
       let canvas = document.getElementById("canvas");
       let ctx = canvas.getContext("2d");
       ctx.fillStyle = "blue";

@@ -143,3 +143,9 @@ a {
 a:hover {
     color: var(--secondary-theme-colour);
 }
+
+.inputRow {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
