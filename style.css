@@ -202,3 +202,8 @@ a:hover {
 .jsonButton {
     flex: 1;
 }
+
+.breaker {
+    width: 100%;
+    visibility: hidden;
+}
