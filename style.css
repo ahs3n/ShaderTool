@@ -121,11 +121,15 @@ p {
     margin: 0px;
 }
 
-#shaderInfo {
+.shaderInfo {
     display: flex;
     flex-direction: row;   
     justify-content: space-between;
     align-items: center;
+}
+
+.shaderInfo > * {
+    margin: 0 .5rem;
 }
 
 a {
