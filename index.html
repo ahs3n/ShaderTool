@@ -51,7 +51,7 @@
                 <input type="number" placeholder="1" min="1">
               </div>
               <div class="inputSection">
-                <p>Frame Timer</p> <!-- This is a toggle -->
+                <button>Frame Timer</button> <!-- This is a toggle -->
               </div>
             </div>
 
@@ -62,7 +62,7 @@
               </div>
               <input type="range">
               <div class="inputSection">
-                <input type="number" placeholder="60">
+                <input type="number" placeholder="60" min="0" max="60"> <!-- min and max must be set to match range specified -->
                 <button>⟳</button> <!-- This button is a toggle: when toggled on, it will be blue and time will loop in the specified range -->
               </div>
             </div>
