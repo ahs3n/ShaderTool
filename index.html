@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
-    <title>ShaderTool : New</title>
+    <title>ShaderTool :New</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,7 +47,7 @@
 
             <div class="inputRow">
               <div class="inputSection">
-                <p>Paint calls: </p>
+                <p>Paint calls:</p>
                 <input type="number" placeholder="1" min="1">
               </div>
               <div class="inputSection">
@@ -57,26 +57,64 @@
 
             <div class="inputRow">
               <div class="inputSection">
-                <p>iTime: </p>
+                <p>iTime:</p>
                 <input type="number" placeholder="0">
               </div>
               <input type="range">
               <div class="inputSection">
                 <input type="number" placeholder="60" min="0" max="60"> <!-- min and max must be set to match range specified -->
-                <button>⟳</button> <!-- This button is a toggle: when toggled on, it will be blue and time will loop in the specified range -->
+                <button>⟳</button> <!-- This button is a toggle:when toggled on, it will be blue and time will loop in the specified range -->
               </div>
             </div>
 
             <div class="inputRow">
               <div class="inputSection">
-                <p>iFrame: </p>
+                <p>iFrame:</p>
                 <input type="number" placeholder="currentFrameByJS">
               </div>
               <div class="inputSection"></div>
             </div>
 
             <div class="inputRow">
+              <p>iMouse:</p>
+              <div class="inputSection"></div>
+            </div>
 
+            <div class="inputRow">  <!-- default to current data -->
+              <p>x:256</p>
+              <p>y:512</p>
+              <p>z:203</p>
+              <p>w:128</p>
+            </div>
+
+            <div class="inputRow">
+              <input type="range" min="0" max="800">
+              <input type="range" min="0" max="640">
+            </div>
+
+            <div class="inputRow">
+              <input type="range" min="0" max="800">
+              <input type="range" min="0" max="640">
+            </div>
+
+            <div class="inputRow">
+              <button id="mouseDown">Mouse Down</button> <!-- toggle -->
+            </div>
+
+            <div class="inputRow">
+              <p>iDate:</p> <!-- default to current data -->
+              <p>Year:</p>
+              <input type="number" placeholder="2024">
+              <p>Month:</p>
+              <input type="number" placeholder="06">
+            </div>
+
+            <div class="inputRow">
+              <button>⟳</button> <!-- revert to present -->
+              <p>Day:</p>
+              <input type="number" placeholder="19">
+              <p>Second:</p>
+              <input type="number" placeholder="103294">
             </div>
 
           </div>
@@ -104,7 +142,7 @@
 
                 <div class="inputRow">
                   <div class="inputSection">
-                    <p>Resolution: </p>
+                    <p>Resolution:</p>
                     <input type="number" placeholder="800" min="1"> <!-- use js to make this match the current resolution unless overridden -->
                     <p> x </p>
                     <input type="number" placeholder="640" min="1">
@@ -113,7 +151,7 @@
                 </div>
                 <div class="inputRow">
                   <div class="inputSection">
-                    <p>Frame Rate: </p>
+                    <p>Frame Rate:</p>
                     <input type="number" placeholder="60" min=".000001">
                   </div>
                   <button>
@@ -123,7 +161,7 @@
 
                 <div class="inputRow">
                   <div class="inputSection">
-                    <p>Frames: </p>
+                    <p>Frames:</p>
                     <input type="number" placeholder="360" min="1">
                   </div>
                   <button>
@@ -133,11 +171,11 @@
 
                 <div class="inputRow">
                   <div class="inputSection">
-                    <p>Paint calls: </p>
+                    <p>Paint calls:</p>
                     <input type="number" placeholder="1" min="1">
                   </div>
                   <div class="inputSection">
-                    <p>Prefix: </p>
+                    <p>Prefix:</p>
                     <input type="text" placeholder="img">
                   </div>
                 </div>
@@ -155,10 +193,10 @@
         </div>
         <div class="shaderInfo">
           <h3>Forked from <a href="https://www.shadertoy.com/view/md3BDS">minitemplate</a></h3>
-          <h3>Views: 339</h3>
+          <h3>Views:339</h3>
         </div>
         <div class="shaderInfo">
-          <h4>Tags: raymarching, mirror, recursion, dark</h4>
+          <h4>Tags:raymarching, mirror, recursion, dark</h4>
           <h2>🍴 + &lt; &gt; 💖36</h2>
         </div>
         <div class="shaderInfo">

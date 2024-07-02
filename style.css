@@ -209,3 +209,7 @@ a:hover {
     visibility: hidden;
     margin: -.5rem;
 }
+
+#mouseDown {
+    width: 100%;
+}
