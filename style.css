@@ -113,6 +113,10 @@ input[type=number] {
     width: 4rem;
 }
 
+input[type=range]{
+    height: .2rem;
+}
+
 
 #canvas {
     margin: 0px -.5rem;
@@ -163,10 +167,6 @@ p {
     margin: 0 .5rem;
 }
 
-#shaderSave > * {
-    margin: 0 .5rem;
-}
-
 a {
     color: var(--primary-theme-colour);
 }
@@ -197,8 +197,7 @@ a:hover {
 }
 
 .inputSection > * {
-    margin-bottom: 0;
-    margin-top: 0;
+    margin: 0 .5rem;
 }
 
 .jsonButton {
