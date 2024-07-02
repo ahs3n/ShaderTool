@@ -44,17 +44,43 @@
           <hr class="breaker">
           
           <div id="advancedBox">
-            <div class="inputRow">
-              <button>
-                ⟳
-              </button>
-              <button>
 
-              </button>
+            <div class="inputRow">
+              <div class="inputSection">
+                <p>Paint calls: </p>
+                <input type="number" placeholder="1" min="1">
+              </div>
+              <div class="inputSection">
+                <p>Frame Timer</p> <!-- This is a toggle -->
+              </div>
             </div>
+
+            <div class="inputRow">
+              <div class="inputSection">
+                <p>iTime: </p>
+                <input type="number" placeholder="0">
+              </div>
+              <input type="range">
+              <div class="inputSection">
+                <input type="number" placeholder="60">
+                <button>⟳</button> <!-- This button is a toggle: when toggled on, it will be blue and time will loop in the specified range -->
+              </div>
+            </div>
+
+            <div class="inputRow">
+              <div class="inputSection">
+                <p>iFrame: </p>
+                <input type="number" placeholder="currentFrameByJS">
+              </div>
+              <div class="inputSection"></div>
+            </div>
+
+            
+
           </div>
 
           <div id="exportBox">
+
             <div class="inputRow">
               <button class="jsonButton">
                 Export JSON
@@ -64,7 +90,8 @@
               </button>
             </div>
 
-            <div class="outerBox">
+            <div class="innerBox">
+
               <a class="dropdownSelector" onclick="renderBox.style.display = renderBox.style.display=='block'?'none':'block';">
                 <p>
                   > Render
@@ -72,6 +99,7 @@
               </a>
 
               <div id="renderBox">
+
                 <div class="inputRow">
                   <div class="inputSection">
                     <p>Resolution: </p>
@@ -90,6 +118,7 @@
                     Preview <!-- makes the screen resolution the size specified above, also button turns blue -->
                   </button>
                 </div>
+
                 <div class="inputRow">
                   <div class="inputSection">
                     <p>Frames: </p>
@@ -99,6 +128,7 @@
                     Render
                   </button>
                 </div>
+
                 <div class="inputRow">
                   <div class="inputSection">
                     <p>Paint calls: </p>
@@ -109,6 +139,7 @@
                     <input type="text" placeholder="img">
                   </div>
                 </div>
+
               </div>
               
             </div>
