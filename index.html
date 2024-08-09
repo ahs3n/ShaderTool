@@ -24,7 +24,9 @@
             800 x 640
           </p>
           <canvas id="canvas" width="800" height="640"></canvas>
-          <p>|&lt || iTime 59.2 fps</p>
+          <p>
+            <span style="user-select: none" class="inline" onclick="restartShader()">|&lt</span> <span style="user-select: none" class="inline" onclick="pauseShader()" >||</span> <span class="inline" id="iTimeDisplay">0</span>s <span class="inline" id="fpsCounter">XX.x</span>fps
+          </p>
         </div>
 
         <div class="innerBox optionsBox">
@@ -229,23 +231,19 @@
 
     </div>
 
-    <script>
-      let advancedBox = document.getElementById('advancedBox');
-      let exportBox = document.getElementById('exportBox'); 
-      let renderBox = document.getElementById('renderBox'); 
+    <script id="vertex-shader" type="x-shader/x-vertex">
+      #ifdef GL_ES
+        precision highp float;
+      #endif
 
+      attribute vec2 aPos_ndc;
 
-      let canvas = document.getElementById("canvas");
-      let ctx = canvas.getContext("2d");
-      ctx.fillStyle = "blue";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.beginPath();
-      ctx.arc(canvas.width/2, canvas.height/2, canvas.height/2, 0, 2 * Math.PI, false);
-      ctx.fillStyle = 'red';
-      ctx.fill();
-      ctx.lineWidth = 5;
-      ctx.strokeStyle = '#003300';
-      ctx.stroke();
+      void main() {
+        gl_Position = vec4(aPos_ndc, 0.0, 1.0);
+      }
+    </script>
+
+    <script src="index.js">
     </script>
   </body>
 </HTML>

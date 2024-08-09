@@ -267,3 +267,12 @@ a:hover {
 #mouseDown {
     width: 100%;
 }
+
+.inline {
+    padding: 0;
+    margin: 0;
+}
+
+.no-select {
+    user-select: none; /* Prevents text selection */
+}
