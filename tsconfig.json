@@ -1,0 +1,8 @@
+{
+    "compilerOptions": {
+    },
+    "exclude": [
+      "**/*.js"      // exclude all JavaScript files (avoids multiple declaration errors)
+    ]
+  }
+  
