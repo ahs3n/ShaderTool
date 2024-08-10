@@ -1,6 +1,6 @@
 :root {
-    --primary-bg-colour: #333;
-    --secondary-bg-colour: #444;
+    --primary-bg-colour: #171717;
+    --secondary-bg-colour: #333;
     --primary-txt-colour: #eee;
     --secondary-txt-colour: #9e9e9e;
     --primary-theme-colour: #37B;
@@ -40,8 +40,8 @@ body {
         
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     gap: .5rem;
-    flex: 1;
 }
 
 .innerBox {
@@ -170,7 +170,25 @@ input[type="range"]::-moz-range-thumb {
     background-color: var(--primary-theme-colour);
 }
 
+.resSelector {
+    color: inherit;
+    border: none; /* Remove the default border */
+    border-radius: 5%;
+    background: none; /* Remove default background */
+    font-size: 16px; /* Match font size with surrounding text */
+    resize: none; /* Optional: prevent resizing if desired */
+    outline: none; /* Remove default focus outline */
+    overflow:hidden;
+    width: 4ch;
+    height: 1em;
+    display: inline-block; /* Align with inline content */
+    vertical-align: bottom; /* Adjust vertical alignment */
+}
 
+.resSelector:focus {
+    border: 2px solid #777; /* Light up border color when focused */
+    border-radius: 10%;
+}
 
 #canvas {
     margin: 0px -.5rem;
@@ -180,6 +198,8 @@ input[type="range"]::-moz-range-thumb {
     flex-direction: row;
     justify-content: space-around;
     flex-wrap: wrap;
+    min-width: min-content;
+    width: max-content;
 }
 
 #advancedBox {
@@ -201,6 +221,7 @@ input[type="range"]::-moz-range-thumb {
 
 .codeBox {
     height: 100%;
+    overflow: hidden;
 }
 
 p {
@@ -212,9 +233,12 @@ p {
 
 .shaderInfo {
     display: flex;
-    flex-direction: row;   
+    flex-direction: row;
+    flex: 0 1 auto;
     justify-content: space-between;
     align-items: center;
+    min-width: min-content;
+    width: max-content;
 }
 
 .shaderInfo > * {

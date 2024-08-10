@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <HTML>
   <head>
 
@@ -10,39 +11,55 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <link href='https://fonts.googleapis.com/css?family=JetBrains Mono' rel='stylesheet'>
 
     <meta name="theme-color" content="#003355">
 
   </head>
   <body>
-    <div class="content">
+    <div class="content" style="display: flex; flex-wrap: wrap;">
 
-      <div class="outerBox">
+      <div class="outerBox" style="flex: 0 1 auto; min-width: min-content">
 
-        <div class="innerBox">
+        <div class="innerBox" style="width: min-content; min-width: min-content;">
           <p>
-            800 x 640
+            <textarea class="resSelector" id="resSelX">800</textarea> x <textarea class="resSelector" id="resSelY">640</textarea>
           </p>
-          <canvas id="canvas" width="800" height="640"></canvas>
+          <div style="display: flex; justify-content: center; align-items: center; min-width: min-content; width: 100%; background-color: black; padding: 0; margin: 0; border: 0px">
+            <canvas id="canvas" width="800" height="640" style="width: 800px; height: 640px"></canvas>
+          </div>
           <p>
-            <span style="user-select: none" class="inline" onclick="restartShader()">|&lt</span> <span style="user-select: none" class="inline" onclick="pauseShader()" >||</span> <span class="inline" id="iTimeDisplay">0</span>s <span class="inline" id="fpsCounter">XX.x</span>fps
+            <span style="user-select: none">
+              <span style="user-select: none" class="inline" onclick="restartShader()">|&lt</span> <span style="user-select: none" class="inline" onclick="pauseShader()" >||</span>
+            </span>
+            <span class="inline" id="iTimeDisplay">0</span>s <span class="inline" id="fpsCounter">XX.x</span>fps
           </p>
         </div>
 
         <div class="innerBox optionsBox">
 
           <hr class="breaker">
-          <a onclick="advancedBox.style.display = advancedBox.style.display=='block'?'none':'block'; exportBox.style.display='none'">
-            <p>
-              > Advanced
-            </p>
-          </a>
-          
-          <a onclick="exportBox.style.display = exportBox.style.display=='block'?'none':'block'; advancedBox.style.display='none';">
-            <p>
-              > Export
-            </p>
-          </a>
+
+          <div style="display: flex; flex-direction: horizontal; flex: 1 1 auto; min-width: min-content">
+            <a style="user-select: none; min-width: max-content" onclick="advancedBox.style.display = advancedBox.style.display=='block'?'none':'block'; exportBox.style.display='none'">
+              <p>
+                > Advanced
+              </p>
+            </a>
+            
+            <a style="user-select: none; min-width: max-content" onclick="exportBox.style.display = exportBox.style.display=='block'?'none':'block'; advancedBox.style.display='none';">
+              <p>
+                > Export
+              </p>
+            </a>
+
+            <a style="min-width: max-content" class="dropdownSelector" onclick="renderBox.style.display = renderBox.style.display=='block'?'none':'block';">
+              <p>
+                > Render
+              </p>
+            </a>
+          </div>
+
           <hr class="breaker">
           
           <div id="advancedBox">
@@ -131,65 +148,56 @@
                 Import JSON
               </button>
             </div>
+          </div>
+          
+          <div id="renderBox">
 
-            <div class="innerBox">
-
-              <a class="dropdownSelector" onclick="renderBox.style.display = renderBox.style.display=='block'?'none':'block';">
-                <p>
-                  > Render
-                </p>
-              </a>
-
-              <div id="renderBox">
-
-                <div class="inputRow">
-                  <div class="inputSection">
-                    <p>Resolution:</p>
-                    <input type="number" placeholder="800" min="1"> <!-- use js to make this match the current resolution unless overridden -->
-                    <p> x </p>
-                    <input type="number" placeholder="640" min="1">
-                  </div>
-                  <div class="inputSection"></div>
-                </div>
-                <div class="inputRow">
-                  <div class="inputSection">
-                    <p>Frame Rate:</p>
-                    <input type="number" placeholder="60" min=".000001">
-                  </div>
-                  <button>
-                    Preview <!-- makes the screen resolution the size specified above, also button turns blue -->
-                  </button>
-                </div>
-
-                <div class="inputRow">
-                  <div class="inputSection">
-                    <p>Frames:</p>
-                    <input type="number" placeholder="360" min="1">
-                  </div>
-                  <button>
-                    Render
-                  </button>
-                </div>
-
-                <div class="inputRow">
-                  <div class="inputSection">
-                    <p>Paint calls:</p>
-                    <input type="number" placeholder="1" min="1">
-                  </div>
-                  <div class="inputSection">
-                    <p>Prefix:</p>
-                    <input type="text" placeholder="img">
-                  </div>
-                </div>
-
+            <div class="inputRow">
+              <div class="inputSection">
+                <!--
+                <p>Resolution:</p>
+                <input type="number" placeholder="800" min="1">
+                <p> x </p>
+                <input type="number" placeholder="640" min="1">-->
               </div>
-              
+              <div class="inputSection"></div>
             </div>
+            <div class="inputRow">
+              <div class="inputSection">
+                <p>Frame Rate:</p>
+                <input type="number" placeholder="60" min=".000001">
+              </div>
+              <button>
+                Preview <!-- makes the screen resolution the size specified above, also button turns blue -->
+              </button>
+            </div>
+
+            <div class="inputRow">
+              <div class="inputSection">
+                <p>Frames:</p>
+                <input type="number" placeholder="360" min="1">
+              </div>
+              <button>
+                Render
+              </button>
+            </div>
+
+            <div class="inputRow">
+              <div class="inputSection">
+                <p>Paint calls:</p>
+                <input type="number" placeholder="1" min="1">
+              </div>
+              <div class="inputSection">
+                <p>Prefix:</p>
+                <input type="text" placeholder="img">
+              </div>
+            </div>
+
           </div>
 
         </div>
 
-        <div class="shaderInfo">
+        <div class="shaderInfo" style="min-width: min-content;">
           <h1>dodecahedron͏</h1>
           <h3>Created by <a href="https://shadertoy.com/user/01000001/">01000001</a> on May 11, 2024</h3>
         </div>
@@ -201,13 +209,13 @@
           <h4>Tags: raymarching, mirror, recursion, dark</h4>
           <h2>🍴 + &lt; &gt; 💖36</h2>
         </div>
-        <div class="shaderInfo">
-          <p>
+        <div class="shaderInfo" style="width: min-content;">
+          <p id="description" style="min-width: 500%;">
             Shader description here! Here we can put lots of stuff about the shader but there's a character limit so you have to be careful that your description isn't too long, otherwi
           </p>
         </div>
 
-        <div id="inputSection">
+        <div id="inputSection" style="width: max-content;">
           <select id="saveMode">
             <option value="private" selected>Private</option>
             <option value="unlisted">Unlisted</option>
@@ -220,12 +228,13 @@
 
       </div>
       
-      <div class="outerBox">
+      <div class="outerBox" style="display: flex; flex: 1">
         <p>Tabs go here</p>
-        <div class="innerBox codeBox">
-          <p>code goes here</p>
+        <div id="editorCont" class="innerBox codeBox">
+          <div style="height: 100%;" id="editor">
         </div>
-        <p>compile button goes here</p>
+        </div>
+        <button id="compileButton" style="font-size: 100%; text-align: left; justify-content: center; max-width: fit-content;" onclick="compileShaders()">&gt compile &lt</button>
         <p>iChannels go here</p>
       </div>
 
@@ -238,18 +247,18 @@
     </script>
     
     <script id="vertex-shader" type="x-shader/x-vertex">
-      #ifdef GL_ES
-        precision highp float;
-      #endif
+#ifdef GL_ES
+  precision highp float;
+#endif
 
-      attribute vec2 aPos_ndc;
+attribute vec2 aPos_ndc;
 
-      void main() {
-        gl_Position = vec4(aPos_ndc, 0.0, 1.0);
-      }
+void main() {
+  gl_Position = vec4(aPos_ndc, 0.0, 1.0);
+}
     </script>
 
-    <script src="index.js">
-    </script>
+    <script type="module" src="dist/index.js"></script>
+    <script type="module" src="dist/editor.js"></script>
   </body>
 </HTML>

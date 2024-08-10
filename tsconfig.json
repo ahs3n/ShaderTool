@@ -1,8 +1,16 @@
 {
     "compilerOptions": {
+      "lib": ["es2015", "dom"],
+      "outDir": "./dist",
+      "rootDir": "./src",
+      "target": "es6",
+      "module": "es6",
+      "sourceMap": true,
+      "moduleResolution": "node", // Ensures module resolution is like Node.js
     },
     "exclude": [
-      "**/*.js"      // exclude all JavaScript files (avoids multiple declaration errors)
+      "**/*.js",      // exclude all JavaScript files (avoids multiple declaration errors)
+      "node_modules"
     ]
   }
   
