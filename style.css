@@ -206,12 +206,12 @@ input[type="range"]::-moz-range-thumb {
     display: none;
 }
 
-#exportBox {
+#archiveBox {
     display: none;
     min-width: 25rem;
 }
 
-#exportBox > * {
+#archiveBox > * {
     margin-top: .5rem;
 }
 

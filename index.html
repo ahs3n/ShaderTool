@@ -41,19 +41,19 @@
           <hr class="breaker">
 
           <div style="display: flex; flex-direction: horizontal; flex: 1 1 auto; min-width: min-content">
-            <a style="user-select: none; min-width: max-content" onclick="advancedBox.style.display = advancedBox.style.display=='block'?'none':'block'; exportBox.style.display='none'">
+            <a style="user-select: none; min-width: max-content" onclick="advancedBox.style.display = advancedBox.style.display=='block'?'none':'block'; archiveBox.style.display='none'; renderBox.style.display='none';">
               <p>
                 > Advanced
               </p>
             </a>
             
-            <a style="user-select: none; min-width: max-content" onclick="exportBox.style.display = exportBox.style.display=='block'?'none':'block'; advancedBox.style.display='none';">
+            <a style="user-select: none; min-width: max-content" onclick="archiveBox.style.display = archiveBox.style.display=='block'?'none':'block'; advancedBox.style.display='none'; renderBox.style.display='none';">
               <p>
-                > Export
+                > Archive
               </p>
             </a>
 
-            <a style="min-width: max-content" class="dropdownSelector" onclick="renderBox.style.display = renderBox.style.display=='block'?'none':'block';">
+            <a style="min-width: max-content" class="dropdownSelector" onclick="renderBox.style.display = renderBox.style.display=='block'?'none':'block'; advancedBox.style.display='none'; archiveBox.style.display='none';">
               <p>
                 > Render
               </p>
@@ -138,11 +138,11 @@
 
           </div>
 
-          <div id="exportBox">
+          <div id="archiveBox">
 
             <div class="inputRow">
               <button class="jsonButton">
-                Export JSON
+                archive JSON
               </button>
               <button class="jsonButton">
                 Import JSON
@@ -242,7 +242,7 @@
     
     <script>
       let advancedBox = document.getElementById('advancedBox');
-      let exportBox = document.getElementById('exportBox'); 
+      let archiveBox = document.getElementById('archiveBox'); 
       let renderBox = document.getElementById('renderBox'); 
     </script>
     
