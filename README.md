@@ -2,12 +2,17 @@
 A modern shadertoy client with additional features.
 [Site In Development](https://ahs3n.github.io/ShaderTool/)
 
-Feel free to contribute! We will be moving forward with vanilla JS to minimize abstractions and external dependencies. Try not to create too many tiny one line functions if you don't need to reuse them more than once.
+Feel free to contribute! This project is using Typescript. 
+
+### Guidelines
+- Try to minimize abstractions and external dependencies. 
+- Try not to create too many tiny one line functions if you don't need to reuse them more than once. A few comments to explain the code are better than 20 unnecessary functions
 
 
-# Features to implement
 
-## UX
+## Features to implement
+
+### UX
 - Will need to create several pages 
 	- Shader page
 		- See [Functionality](README.md#Functionality)
@@ -30,7 +35,7 @@ Feel free to contribute! We will be moving forward with vanilla JS to minimize a
 			- Account
 			- ShaderTool exclusive preferences.
 				- maybe just name the tab "ShaderTool"
-## Functionality
+### Functionality
 - Set frame resolution
 - volume slider
 - Export
@@ -94,7 +99,7 @@ Feel free to contribute! We will be moving forward with vanilla JS to minimize a
 	- recent shaders list, all `<a>` elements so they click properly
 	- possibly our own featured shaders based on community nominations
 
-## Critical design decisions
+### Critical design decisions
 - Never hide anything from the user. The text the user inputs is what gets saved
 	- Nothing like adding custom inputs and obscuring it, and then adding a "See this shader on Shadertool for full functionality!" to the saved shader secretly
 	- Custom channel inputs added by Shadertool must be specified in the code and shown to the user, even if added via GUI
