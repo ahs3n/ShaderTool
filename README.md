@@ -9,7 +9,7 @@ A modern shadertoy client with additional features.
 ## UX
 - Will need to create several pages 
 	- Shader page
-		- See [Functionality](ShaderTool.md#Functionality)
+		- See [Functionality](README.md#Functionality)
 	- Home page
 	- Login page
 		- We will not create accounts for security reasons. We'd have to bypass the security which would make it too easy for bad actors
