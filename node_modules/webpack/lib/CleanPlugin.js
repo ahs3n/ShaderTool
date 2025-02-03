@@ -7,7 +7,7 @@
 
 const asyncLib = require("neo-async");
 const { SyncBailHook } = require("tapable");
-const Compilation = require("../lib/Compilation");
+const Compilation = require("./Compilation");
 const createSchemaValidation = require("./util/create-schema-validation");
 const { join } = require("./util/fs");
 const processAsyncTree = require("./util/processAsyncTree");
@@ -25,7 +25,13 @@ const processAsyncTree = require("./util/processAsyncTree");
 
 /**
  * @typedef {object} CleanPluginCompilationHooks
- * @property {SyncBailHook<[string], boolean>} keep when returning true the file/directory will be kept during cleaning, returning false will clean it and ignore the following plugins and config
+ * @property {SyncBailHook<[string], boolean | void>} keep when returning true the file/directory will be kept during cleaning, returning false will clean it and ignore the following plugins and config
+ */
+
+/**
+ * @callback KeepFn
+ * @param {string} path path
+ * @returns {boolean | void} true, if the path should be kept
  */
 
 const validate = createSchemaValidation(
@@ -143,7 +149,7 @@ const doStat = (fs, filename, callback) => {
  * @param {boolean} dry only log instead of fs modification
  * @param {Logger} logger logger
  * @param {Set<string>} diff filenames of the assets that shouldn't be there
- * @param {function(string): boolean} isKept check if the entry is ignored
+ * @param {function(string): boolean | void} isKept check if the entry is ignored
  * @param {function(Error=, Assets=): void} callback callback
  * @returns {void}
  */
@@ -304,7 +310,6 @@ class CleanPlugin {
 		let hooks = compilationHooksMap.get(compilation);
 		if (hooks === undefined) {
 			hooks = {
-				/** @type {SyncBailHook<[string], boolean>} */
 				keep: new SyncBailHook(["ignore"])
 			};
 			compilationHooksMap.set(compilation, hooks);
@@ -326,21 +331,14 @@ class CleanPlugin {
 	apply(compiler) {
 		const { dry, keep } = this.options;
 
+		/** @type {KeepFn} */
 		const keepFn =
 			typeof keep === "function"
 				? keep
 				: typeof keep === "string"
-					? /**
-						 * @param {string} path path
-						 * @returns {boolean} true, if the path should be kept
-						 */
-						path => path.startsWith(keep)
+					? path => path.startsWith(keep)
 					: typeof keep === "object" && keep.test
-						? /**
-							 * @param {string} path path
-							 * @returns {boolean} true, if the path should be kept
-							 */
-							path => keep.test(path)
+						? path => keep.test(path)
 						: () => false;
 
 		// We assume that no external modification happens while the compiler is active
@@ -394,7 +392,7 @@ class CleanPlugin {
 
 				/**
 				 * @param {string} path path
-				 * @returns {boolean} true, if needs to be kept
+				 * @returns {boolean | void} true, if needs to be kept
 				 */
 				const isKept = path => {
 					const result = hooks.keep.call(path);

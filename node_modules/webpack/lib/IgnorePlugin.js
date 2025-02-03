@@ -5,6 +5,8 @@
 
 "use strict";
 
+const RawModule = require("./RawModule");
+const EntryDependency = require("./dependencies/EntryDependency");
 const createSchemaValidation = require("./util/create-schema-validation");
 
 /** @typedef {import("../declarations/plugins/IgnorePlugin").IgnorePluginOptions} IgnorePluginOptions */
@@ -36,9 +38,7 @@ class IgnorePlugin {
 	}
 
 	/**
-	 * Note that if "contextRegExp" is given, both the "resourceRegExp"
-	 * and "contextRegExp" have to match.
-	 *
+	 * Note that if "contextRegExp" is given, both the "resourceRegExp" and "contextRegExp" have to match.
 	 * @param {ResolveData} resolveData resolve data
 	 * @returns {false|undefined} returns false when the request should be ignored, otherwise undefined
 	 */
@@ -75,7 +75,23 @@ class IgnorePlugin {
 	 */
 	apply(compiler) {
 		compiler.hooks.normalModuleFactory.tap("IgnorePlugin", nmf => {
-			nmf.hooks.beforeResolve.tap("IgnorePlugin", this.checkIgnore);
+			nmf.hooks.beforeResolve.tap("IgnorePlugin", resolveData => {
+				const result = this.checkIgnore(resolveData);
+
+				if (
+					result === false &&
+					resolveData.dependencies.length > 0 &&
+					resolveData.dependencies[0] instanceof EntryDependency
+				) {
+					resolveData.ignoredModule = new RawModule(
+						"",
+						"ignored-entry-module",
+						"(ignored-entry-module)"
+					);
+				}
+
+				return result;
+			});
 		});
 		compiler.hooks.contextModuleFactory.tap("IgnorePlugin", cmf => {
 			cmf.hooks.beforeResolve.tap("IgnorePlugin", this.checkIgnore);

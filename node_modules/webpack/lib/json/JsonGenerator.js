@@ -9,12 +9,14 @@ const { RawSource } = require("webpack-sources");
 const ConcatenationScope = require("../ConcatenationScope");
 const { UsageState } = require("../ExportsInfo");
 const Generator = require("../Generator");
+const { JS_TYPES } = require("../ModuleSourceTypesConstants");
 const RuntimeGlobals = require("../RuntimeGlobals");
 
 /** @typedef {import("webpack-sources").Source} Source */
 /** @typedef {import("../ExportsInfo")} ExportsInfo */
 /** @typedef {import("../Generator").GenerateContext} GenerateContext */
 /** @typedef {import("../Module").ConcatenationBailoutReasonContext} ConcatenationBailoutReasonContext */
+/** @typedef {import("../Module").SourceTypes} SourceTypes */
 /** @typedef {import("../NormalModule")} NormalModule */
 /** @typedef {import("../util/runtime").RuntimeSpec} RuntimeSpec */
 /** @typedef {import("./JsonData")} JsonData */
@@ -27,7 +29,7 @@ const RuntimeGlobals = require("../RuntimeGlobals");
 const stringifySafe = data => {
 	const stringified = JSON.stringify(data);
 	if (!stringified) {
-		return undefined; // Invalid JSON
+		return; // Invalid JSON
 	}
 
 	return stringified.replace(/\u2028|\u2029/g, str =>
@@ -53,22 +55,16 @@ const createObjectForExportsInfo = (data, exportsInfo, runtime) => {
 		if (used === UsageState.Unused) continue;
 
 		/** @type {RawJsonData} */
-		let value;
-		if (used === UsageState.OnlyPropertiesUsed && exportInfo.exportsInfo) {
-			value = createObjectForExportsInfo(
-				data[key],
-				exportInfo.exportsInfo,
-				runtime
-			);
-		} else {
-			value = data[key];
-		}
+		const value =
+			used === UsageState.OnlyPropertiesUsed && exportInfo.exportsInfo
+				? createObjectForExportsInfo(data[key], exportInfo.exportsInfo, runtime)
+				: data[key];
 
 		const name = /** @type {string} */ (exportInfo.getUsedName(key, runtime));
 		/** @type {Record<string, RawJsonData>} */ (reducedData)[name] = value;
 	}
 	if (isArray) {
-		let arrayLengthWhenUsed =
+		const arrayLengthWhenUsed =
 			exportsInfo.getReadOnlyExportInfo("length").getUsed(runtime) !==
 			UsageState.Unused
 				? data.length
@@ -109,15 +105,13 @@ const createObjectForExportsInfo = (data, exportsInfo, runtime) => {
 	return reducedData;
 };
 
-const TYPES = new Set(["javascript"]);
-
 class JsonGenerator extends Generator {
 	/**
 	 * @param {NormalModule} module fresh module
-	 * @returns {Set<string>} available types (do not mutate)
+	 * @returns {SourceTypes} available types (do not mutate)
 	 */
 	getTypes(module) {
-		return TYPES;
+		return JS_TYPES;
 	}
 
 	/**
@@ -147,7 +141,7 @@ class JsonGenerator extends Generator {
 	/**
 	 * @param {NormalModule} module module for which the code should be generated
 	 * @param {GenerateContext} generateContext context for generate
-	 * @returns {Source} generated code
+	 * @returns {Source | null} generated code
 	 */
 	generate(
 		module,
@@ -173,7 +167,7 @@ class JsonGenerator extends Generator {
 		}
 		const exportsInfo = moduleGraph.getExportsInfo(module);
 		/** @type {RawJsonData} */
-		let finalJson =
+		const finalJson =
 			typeof data === "object" &&
 			data &&
 			exportsInfo.otherExportsInfo.getUsed(runtime) === UsageState.Unused

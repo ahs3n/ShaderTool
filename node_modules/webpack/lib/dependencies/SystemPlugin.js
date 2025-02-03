@@ -73,7 +73,7 @@ class SystemPlugin {
 								PLUGIN_NAME,
 								expressionIsUnsupported(
 									parser,
-									name + " is not supported by webpack."
+									`${name} is not supported by webpack.`
 								)
 							);
 					};
@@ -125,7 +125,8 @@ class SystemPlugin {
 								/** @type {import("estree").Literal} */
 								(expr.arguments[0]),
 							loc: expr.loc,
-							range: expr.range
+							range: expr.range,
+							options: null
 						});
 					});
 				};

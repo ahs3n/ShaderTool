@@ -34,5 +34,8 @@ module.exports = {
         ]
     },
     mode: 'development', // or 'production'
+    devServer: {
+        static: "."
+    },
     devtool: 'eval-source-map', // For faster rebuilds
 };

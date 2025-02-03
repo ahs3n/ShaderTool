@@ -9,10 +9,12 @@ const util = require("util");
 const ExternalModule = require("./ExternalModule");
 const ContextElementDependency = require("./dependencies/ContextElementDependency");
 const CssImportDependency = require("./dependencies/CssImportDependency");
+const CssUrlDependency = require("./dependencies/CssUrlDependency");
 const HarmonyImportDependency = require("./dependencies/HarmonyImportDependency");
 const ImportDependency = require("./dependencies/ImportDependency");
 const { resolveByProperty, cachedSetProperty } = require("./util/cleverMerge");
 
+/** @typedef {import("../declarations/WebpackOptions").ExternalItemFunctionData} ExternalItemFunctionData */
 /** @typedef {import("../declarations/WebpackOptions").Externals} Externals */
 /** @typedef {import("./Compilation").DepConstructor} DepConstructor */
 /** @typedef {import("./ExternalModule").DependencyMeta} DependencyMeta */
@@ -24,7 +26,14 @@ const EMPTY_RESOLVE_OPTIONS = {};
 
 // TODO webpack 6 remove this
 const callDeprecatedExternals = util.deprecate(
+	/**
+	 * @param {TODO} externalsFunction externals function
+	 * @param {string} context context
+	 * @param {string} request request
+	 * @param {(err: Error | null | undefined, value: ExternalValue | undefined, ty: ExternalType | undefined) => void} cb cb
+	 */
 	(externalsFunction, context, request, cb) => {
+		// eslint-disable-next-line no-useless-call
 		externalsFunction.call(null, context, request, cb);
 	},
 	"The externals-function should be defined like ({context, request}, cb) => { ... }",
@@ -33,11 +42,17 @@ const callDeprecatedExternals = util.deprecate(
 
 const cache = new WeakMap();
 
+/**
+ * @template {object} T
+ * @param {T} obj obj
+ * @param {TODO} layer layer
+ * @returns {Omit<T, "byLayer">} result
+ */
 const resolveLayer = (obj, layer) => {
-	let map = cache.get(obj);
+	let map = cache.get(/** @type {object} */ (obj));
 	if (map === undefined) {
 		map = new Map();
-		cache.set(obj, map);
+		cache.set(/** @type {object} */ (obj), map);
 	} else {
 		const cacheEntry = map.get(layer);
 		if (cacheEntry !== undefined) return cacheEntry;
@@ -46,6 +61,9 @@ const resolveLayer = (obj, layer) => {
 	map.set(layer, result);
 	return result;
 };
+
+/** @typedef {string | string[] | boolean | Record<string, string | string[]>} ExternalValue */
+/** @typedef {string | undefined} ExternalType */
 
 class ExternalModuleFactoryPlugin {
 	/**
@@ -72,8 +90,8 @@ class ExternalModuleFactoryPlugin {
 				const dependencyType = data.dependencyType;
 
 				/**
-				 * @param {string|string[]|boolean|Record<string, string|string[]>} value the external config
-				 * @param {string|undefined} type type of external
+				 * @param {ExternalValue} value the external config
+				 * @param {ExternalType | undefined} type type of external
 				 * @param {function((Error | null)=, ExternalModule=): void} callback callback
 				 * @returns {void}
 				 */
@@ -83,12 +101,7 @@ class ExternalModuleFactoryPlugin {
 						return callback();
 					}
 					/** @type {string | string[] | Record<string, string|string[]>} */
-					let externalConfig;
-					if (value === true) {
-						externalConfig = dependency.request;
-					} else {
-						externalConfig = value;
-					}
+					let externalConfig = value === true ? dependency.request : value;
 					// When no explicit type is specified, extract it from the externalConfig
 					if (type === undefined) {
 						if (
@@ -113,6 +126,8 @@ class ExternalModuleFactoryPlugin {
 						}
 					}
 
+					const resolvedType = /** @type {string} */ (type || globalType);
+
 					// TODO make it pluggable/add hooks to `ExternalModule` to allow output modules own externals?
 					/** @type {DependencyMeta | undefined} */
 					let dependencyMeta;
@@ -122,8 +137,16 @@ class ExternalModuleFactoryPlugin {
 						dependency instanceof ImportDependency ||
 						dependency instanceof ContextElementDependency
 					) {
+						const externalType =
+							dependency instanceof HarmonyImportDependency
+								? "module"
+								: dependency instanceof ImportDependency
+									? "import"
+									: undefined;
+
 						dependencyMeta = {
-							attributes: dependency.assertions
+							attributes: dependency.assertions,
+							externalType
 						};
 					} else if (dependency instanceof CssImportDependency) {
 						dependencyMeta = {
@@ -133,11 +156,18 @@ class ExternalModuleFactoryPlugin {
 						};
 					}
 
+					if (
+						resolvedType === "asset" &&
+						dependency instanceof CssUrlDependency
+					) {
+						dependencyMeta = { sourceType: "css-url" };
+					}
+
 					callback(
 						null,
 						new ExternalModule(
 							externalConfig,
-							type || globalType,
+							resolvedType,
 							dependency.request,
 							dependencyMeta
 						)
@@ -191,6 +221,12 @@ class ExternalModuleFactoryPlugin {
 							return handleExternal(dependency.request, undefined, callback);
 						}
 					} else if (typeof externals === "function") {
+						/**
+						 * @param {Error | null | undefined} err err
+						 * @param {ExternalValue=} value value
+						 * @param {ExternalType=} type type
+						 * @returns {void}
+						 */
 						const cb = (err, value, type) => {
 							if (err) return callback(err);
 							if (value !== undefined) {
@@ -237,7 +273,8 @@ class ExternalModuleFactoryPlugin {
 												context,
 												request,
 												resolveContext,
-												callback
+												/** @type {TODO} */
+												(callback)
 											);
 										} else {
 											return new Promise((resolve, reject) => {

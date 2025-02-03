@@ -14,6 +14,7 @@
 /** @typedef {import("./DependencyTemplates")} DependencyTemplates */
 /** @typedef {import("./Module").ConcatenationBailoutReasonContext} ConcatenationBailoutReasonContext */
 /** @typedef {import("./Module").RuntimeRequirements} RuntimeRequirements */
+/** @typedef {import("./Module").SourceTypes} SourceTypes */
 /** @typedef {import("./ModuleGraph")} ModuleGraph */
 /** @typedef {import("./NormalModule")} NormalModule */
 /** @typedef {import("./RuntimeTemplate")} RuntimeTemplate */
@@ -42,9 +43,6 @@
  * @property {RuntimeTemplate=} runtimeTemplate
  */
 
-/**
- *
- */
 class Generator {
 	/**
 	 * @param {Record<string, Generator>} map map of types
@@ -58,7 +56,7 @@ class Generator {
 	/**
 	 * @abstract
 	 * @param {NormalModule} module fresh module
-	 * @returns {Set<string>} available types (do not mutate)
+	 * @returns {SourceTypes} available types (do not mutate)
 	 */
 	getTypes(module) {
 		const AbstractMethodError = require("./AbstractMethodError");
@@ -82,7 +80,7 @@ class Generator {
 	 * @abstract
 	 * @param {NormalModule} module module for which the code should be generated
 	 * @param {GenerateContext} generateContext context for generate
-	 * @returns {Source} generated code
+	 * @returns {Source | null} generated code
 	 */
 	generate(
 		module,
@@ -122,7 +120,7 @@ class ByTypeGenerator extends Generator {
 
 	/**
 	 * @param {NormalModule} module fresh module
-	 * @returns {Set<string>} available types (do not mutate)
+	 * @returns {SourceTypes} available types (do not mutate)
 	 */
 	getTypes(module) {
 		return this._types;
@@ -133,8 +131,8 @@ class ByTypeGenerator extends Generator {
 	 * @param {string=} type source type
 	 * @returns {number} estimate size of the module
 	 */
-	getSize(module, type) {
-		const t = type || "javascript";
+	getSize(module, type = "javascript") {
+		const t = type;
 		const generator = this.map[t];
 		return generator ? generator.getSize(module, t) : 0;
 	}
@@ -142,7 +140,7 @@ class ByTypeGenerator extends Generator {
 	/**
 	 * @param {NormalModule} module module for which the code should be generated
 	 * @param {GenerateContext} generateContext context for generate
-	 * @returns {Source} generated code
+	 * @returns {Source | null} generated code
 	 */
 	generate(module, generateContext) {
 		const type = generateContext.type;

@@ -12,11 +12,13 @@ const RuntimeGlobals = require("./RuntimeGlobals");
 const SourceMapDevToolModuleOptionsPlugin = require("./SourceMapDevToolModuleOptionsPlugin");
 const JavascriptModulesPlugin = require("./javascript/JavascriptModulesPlugin");
 const ConcatenatedModule = require("./optimize/ConcatenatedModule");
+const generateDebugId = require("./util/generateDebugId");
 const { makePathsAbsolute } = require("./util/identifier");
 
 /** @typedef {import("webpack-sources").Source} Source */
 /** @typedef {import("../declarations/WebpackOptions").DevTool} DevToolOptions */
 /** @typedef {import("../declarations/plugins/SourceMapDevToolPlugin").SourceMapDevToolPluginOptions} SourceMapDevToolPluginOptions */
+/** @typedef {import("./ChunkGraph").ModuleId} ModuleId */
 /** @typedef {import("./Compiler")} Compiler */
 /** @typedef {import("./NormalModule").SourceMap} SourceMap */
 
@@ -76,7 +78,7 @@ class EvalSourceMapDevToolPlugin {
 				);
 				hooks.renderModuleContent.tap(
 					"EvalSourceMapDevToolPlugin",
-					(source, m, { runtimeTemplate, chunkGraph }) => {
+					(source, m, { chunk, runtimeTemplate, chunkGraph }) => {
 						const cachedSource = cache.get(source);
 						if (cachedSource !== undefined) {
 							return cachedSource;
@@ -112,6 +114,9 @@ class EvalSourceMapDevToolPlugin {
 							return result(source);
 						}
 
+						const namespace = compilation.getPath(this.namespace, {
+							chunk
+						});
 						/** @type {SourceMap} */
 						let sourceMap;
 						let content;
@@ -137,20 +142,20 @@ class EvalSourceMapDevToolPlugin {
 							const module = compilation.findModule(source);
 							return module || source;
 						});
-						let moduleFilenames = modules.map(module => {
-							return ModuleFilenameHelpers.createFilename(
+						let moduleFilenames = modules.map(module =>
+							ModuleFilenameHelpers.createFilename(
 								module,
 								{
 									moduleFilenameTemplate: this.moduleFilenameTemplate,
-									namespace: this.namespace
+									namespace
 								},
 								{
 									requestShortener: runtimeTemplate.requestShortener,
 									chunkGraph,
 									hashFunction: compilation.outputOptions.hashFunction
 								}
-							);
-						});
+							)
+						);
 						moduleFilenames = ModuleFilenameHelpers.replaceDuplicates(
 							moduleFilenames,
 							(filename, i, n) => {
@@ -163,18 +168,23 @@ class EvalSourceMapDevToolPlugin {
 							sourceMap.sourcesContent = undefined;
 						}
 						sourceMap.sourceRoot = options.sourceRoot || "";
-						const moduleId = chunkGraph.getModuleId(m);
+						const moduleId =
+							/** @type {ModuleId} */
+							(chunkGraph.getModuleId(m));
 						sourceMap.file =
 							typeof moduleId === "number" ? `${moduleId}.js` : moduleId;
 
-						const footer =
-							this.sourceMapComment.replace(
-								/\[url\]/g,
-								`data:application/json;charset=utf-8;base64,${Buffer.from(
-									JSON.stringify(sourceMap),
-									"utf8"
-								).toString("base64")}`
-							) + `\n//# sourceURL=webpack-internal:///${moduleId}\n`; // workaround for chrome bug
+						if (options.debugIds) {
+							sourceMap.debugId = generateDebugId(content, sourceMap.file);
+						}
+
+						const footer = `${this.sourceMapComment.replace(
+							/\[url\]/g,
+							`data:application/json;charset=utf-8;base64,${Buffer.from(
+								JSON.stringify(sourceMap),
+								"utf8"
+							).toString("base64")}`
+						)}\n//# sourceURL=webpack-internal:///${moduleId}\n`; // workaround for chrome bug
 
 						return result(
 							new RawSource(

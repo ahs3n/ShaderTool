@@ -30,9 +30,8 @@ const AbstractLibraryPlugin = require("./AbstractLibraryPlugin");
  * @param {string[]} accessor the accessor to convert to path
  * @returns {string} the path
  */
-const accessorToObjectAccess = accessor => {
-	return accessor.map(a => `[${JSON.stringify(a)}]`).join("");
-};
+const accessorToObjectAccess = accessor =>
+	accessor.map(a => `[${JSON.stringify(a)}]`).join("");
 
 /**
  * @param {string|undefined} base the path prefix
@@ -65,10 +64,10 @@ const accessorAccess = (base, accessor, joinWith = ", ") => {
 
 /**
  * @typedef {object} UmdLibraryPluginParsed
- * @property {string | string[]} name
+ * @property {string | string[] | undefined} name
  * @property {LibraryCustomUmdObject} names
- * @property {string | LibraryCustomUmdCommentObject} auxiliaryComment
- * @property {boolean} namedDefine
+ * @property {string | LibraryCustomUmdCommentObject | undefined} auxiliaryComment
+ * @property {boolean | undefined} namedDefine
  */
 
 /**
@@ -93,7 +92,7 @@ class UmdLibraryPlugin extends AbstractLibraryPlugin {
 	 * @returns {T | false} preprocess as needed by overriding
 	 */
 	parseOptions(library) {
-		/** @type {LibraryName} */
+		/** @type {LibraryName | undefined} */
 		let name;
 		/** @type {LibraryCustomUmdObject} */
 		let names;
@@ -157,18 +156,17 @@ class UmdLibraryPlugin extends AbstractLibraryPlugin {
 		 * @param {string} str the string to replace
 		 * @returns {string} the replaced keys
 		 */
-		const replaceKeys = str => {
-			return compilation.getPath(str, {
+		const replaceKeys = str =>
+			compilation.getPath(str, {
 				chunk
 			});
-		};
 
 		/**
 		 * @param {ExternalModule[]} modules external modules
 		 * @returns {string} result
 		 */
-		const externalsDepsArray = modules => {
-			return `[${replaceKeys(
+		const externalsDepsArray = modules =>
+			`[${replaceKeys(
 				modules
 					.map(m =>
 						JSON.stringify(
@@ -180,14 +178,13 @@ class UmdLibraryPlugin extends AbstractLibraryPlugin {
 					)
 					.join(", ")
 			)}]`;
-		};
 
 		/**
 		 * @param {ExternalModule[]} modules external modules
 		 * @returns {string} result
 		 */
-		const externalsRootArray = modules => {
-			return replaceKeys(
+		const externalsRootArray = modules =>
+			replaceKeys(
 				modules
 					.map(m => {
 						let request = m.request;
@@ -195,18 +192,17 @@ class UmdLibraryPlugin extends AbstractLibraryPlugin {
 							request =
 								/** @type {RequestRecord} */
 								(request).root;
-						return `root${accessorToObjectAccess([].concat(request))}`;
+						return `root${accessorToObjectAccess(/** @type {string[]} */ ([]).concat(request))}`;
 					})
 					.join(", ")
 			);
-		};
 
 		/**
 		 * @param {string} type the type
 		 * @returns {string} external require array
 		 */
-		const externalsRequireArray = type => {
-			return replaceKeys(
+		const externalsRequireArray = type =>
+			replaceKeys(
 				externals
 					.map(m => {
 						let expr;
@@ -218,16 +214,14 @@ class UmdLibraryPlugin extends AbstractLibraryPlugin {
 						}
 						if (request === undefined) {
 							throw new Error(
-								"Missing external configuration for type:" + type
+								`Missing external configuration for type:${type}`
 							);
 						}
-						if (Array.isArray(request)) {
-							expr = `require(${JSON.stringify(
-								request[0]
-							)})${accessorToObjectAccess(request.slice(1))}`;
-						} else {
-							expr = `require(${JSON.stringify(request)})`;
-						}
+						expr = Array.isArray(request)
+							? `require(${JSON.stringify(
+									request[0]
+								)})${accessorToObjectAccess(request.slice(1))}`
+							: `require(${JSON.stringify(request)})`;
 						if (m.isOptional(moduleGraph)) {
 							expr = `(function webpackLoadOptionalExternalModule() { try { return ${expr}; } catch(e) {} }())`;
 						}
@@ -235,14 +229,13 @@ class UmdLibraryPlugin extends AbstractLibraryPlugin {
 					})
 					.join(", ")
 			);
-		};
 
 		/**
 		 * @param {ExternalModule[]} modules external modules
 		 * @returns {string} arguments
 		 */
-		const externalsArguments = modules => {
-			return modules
+		const externalsArguments = modules =>
+			modules
 				.map(
 					m =>
 						`__WEBPACK_EXTERNAL_MODULE_${Template.toIdentifier(
@@ -250,26 +243,27 @@ class UmdLibraryPlugin extends AbstractLibraryPlugin {
 						)}__`
 				)
 				.join(", ");
-		};
 
 		/**
 		 * @param {string| string[]} library library name
 		 * @returns {string} stringified library name
 		 */
-		const libraryName = library => {
-			return JSON.stringify(
-				replaceKeys(/** @type {string[]} */ ([]).concat(library).pop())
+		const libraryName = library =>
+			JSON.stringify(
+				replaceKeys(
+					/** @type {string} */
+					(/** @type {string[]} */ ([]).concat(library).pop())
+				)
 			);
-		};
 
 		let amdFactory;
 		if (optionalExternals.length > 0) {
 			const wrapperArguments = externalsArguments(requiredExternals);
 			const factoryArguments =
 				requiredExternals.length > 0
-					? externalsArguments(requiredExternals) +
-						", " +
-						externalsRootArray(optionalExternals)
+					? `${externalsArguments(requiredExternals)}, ${externalsRootArray(
+							optionalExternals
+						)}`
 					: externalsRootArray(optionalExternals);
 			amdFactory =
 				`function webpackLoadOptionalExternalModuleAmd(${wrapperArguments}) {\n` +
@@ -288,72 +282,60 @@ class UmdLibraryPlugin extends AbstractLibraryPlugin {
 		const getAuxiliaryComment = type => {
 			if (auxiliaryComment) {
 				if (typeof auxiliaryComment === "string")
-					return "\t//" + auxiliaryComment + "\n";
-				if (auxiliaryComment[type])
-					return "\t//" + auxiliaryComment[type] + "\n";
+					return `\t//${auxiliaryComment}\n`;
+				if (auxiliaryComment[type]) return `\t//${auxiliaryComment[type]}\n`;
 			}
 			return "";
 		};
 
 		return new ConcatSource(
 			new OriginalSource(
-				"(function webpackUniversalModuleDefinition(root, factory) {\n" +
-					getAuxiliaryComment("commonjs2") +
-					"	if(typeof exports === 'object' && typeof module === 'object')\n" +
-					"		module.exports = factory(" +
-					externalsRequireArray("commonjs2") +
-					");\n" +
-					getAuxiliaryComment("amd") +
-					"	else if(typeof define === 'function' && define.amd)\n" +
-					(requiredExternals.length > 0
-						? names.amd && namedDefine === true
-							? "		define(" +
-								libraryName(names.amd) +
-								", " +
-								externalsDepsArray(requiredExternals) +
-								", " +
-								amdFactory +
-								");\n"
-							: "		define(" +
-								externalsDepsArray(requiredExternals) +
-								", " +
-								amdFactory +
-								");\n"
-						: names.amd && namedDefine === true
-							? "		define(" +
-								libraryName(names.amd) +
-								", [], " +
-								amdFactory +
-								");\n"
-							: "		define([], " + amdFactory + ");\n") +
-					(names.root || names.commonjs
-						? getAuxiliaryComment("commonjs") +
-							"	else if(typeof exports === 'object')\n" +
-							"		exports[" +
-							libraryName(names.commonjs || names.root) +
-							"] = factory(" +
-							externalsRequireArray("commonjs") +
-							");\n" +
-							getAuxiliaryComment("root") +
-							"	else\n" +
-							"		" +
-							replaceKeys(
-								accessorAccess("root", names.root || names.commonjs)
-							) +
-							" = factory(" +
-							externalsRootArray(externals) +
-							");\n"
-						: "	else {\n" +
-							(externals.length > 0
-								? "		var a = typeof exports === 'object' ? factory(" +
-									externalsRequireArray("commonjs") +
-									") : factory(" +
-									externalsRootArray(externals) +
-									");\n"
-								: "		var a = factory();\n") +
-							"		for(var i in a) (typeof exports === 'object' ? exports : root)[i] = a[i];\n" +
-							"	}\n") +
-					`})(${runtimeTemplate.outputOptions.globalObject}, ${
+				`(function webpackUniversalModuleDefinition(root, factory) {\n${getAuxiliaryComment(
+					"commonjs2"
+				)}	if(typeof exports === 'object' && typeof module === 'object')\n` +
+					`		module.exports = factory(${externalsRequireArray(
+						"commonjs2"
+					)});\n${getAuxiliaryComment(
+						"amd"
+					)}	else if(typeof define === 'function' && define.amd)\n${
+						requiredExternals.length > 0
+							? names.amd && namedDefine === true
+								? `		define(${libraryName(names.amd)}, ${externalsDepsArray(
+										requiredExternals
+									)}, ${amdFactory});\n`
+								: `		define(${externalsDepsArray(requiredExternals)}, ${
+										amdFactory
+									});\n`
+							: names.amd && namedDefine === true
+								? `		define(${libraryName(names.amd)}, [], ${amdFactory});\n`
+								: `		define([], ${amdFactory});\n`
+					}${
+						names.root || names.commonjs
+							? `${getAuxiliaryComment(
+									"commonjs"
+								)}	else if(typeof exports === 'object')\n` +
+								`		exports[${libraryName(
+									/** @type {string | string[]} */
+									(names.commonjs || names.root)
+								)}] = factory(${externalsRequireArray(
+									"commonjs"
+								)});\n${getAuxiliaryComment("root")}	else\n` +
+								`		${replaceKeys(
+									accessorAccess(
+										"root",
+										/** @type {string | string[]} */
+										(names.root || names.commonjs)
+									)
+								)} = factory(${externalsRootArray(externals)});\n`
+							: `	else {\n${
+									externals.length > 0
+										? `		var a = typeof exports === 'object' ? factory(${externalsRequireArray(
+												"commonjs"
+											)}) : factory(${externalsRootArray(externals)});\n`
+										: "		var a = factory();\n"
+								}		for(var i in a) (typeof exports === 'object' ? exports : root)[i] = a[i];\n` +
+								"	}\n"
+					}})(${runtimeTemplate.outputOptions.globalObject}, ${
 						runtimeTemplate.supportsArrowFunction()
 							? `(${externalsArguments(externals)}) =>`
 							: `function(${externalsArguments(externals)})`

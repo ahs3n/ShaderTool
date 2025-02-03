@@ -34,27 +34,28 @@ const { forEachRuntime, subtractRuntime } = require("./util/runtime");
  * @param {ChunkGraph} chunkGraph the chunk graph
  * @returns {string} error message
  */
-const noModuleIdErrorMessage = (module, chunkGraph) => {
-	return `Module ${module.identifier()} has no id assigned.
+const noModuleIdErrorMessage = (
+	module,
+	chunkGraph
+) => `Module ${module.identifier()} has no id assigned.
 This should not happen.
 It's in these chunks: ${
-		Array.from(
-			chunkGraph.getModuleChunksIterable(module),
-			c => c.name || c.id || c.debugId
-		).join(", ") || "none"
-	} (If module is in no chunk this indicates a bug in some chunk/module optimization logic)
+	Array.from(
+		chunkGraph.getModuleChunksIterable(module),
+		c => c.name || c.id || c.debugId
+	).join(", ") || "none"
+} (If module is in no chunk this indicates a bug in some chunk/module optimization logic)
 Module has these incoming connections: ${Array.from(
-		chunkGraph.moduleGraph.getIncomingConnections(module),
-		connection =>
-			`\n - ${
-				connection.originModule && connection.originModule.identifier()
-			} ${connection.dependency && connection.dependency.type} ${
-				(connection.explanations &&
-					Array.from(connection.explanations).join(", ")) ||
-				""
-			}`
-	).join("")}`;
-};
+	chunkGraph.moduleGraph.getIncomingConnections(module),
+	connection =>
+		`\n - ${
+			connection.originModule && connection.originModule.identifier()
+		} ${connection.dependency && connection.dependency.type} ${
+			(connection.explanations &&
+				Array.from(connection.explanations).join(", ")) ||
+			""
+		}`
+).join("")}`;
 
 /**
  * @param {string | undefined} definition global object definition
@@ -66,11 +67,11 @@ function getGlobalObject(definition) {
 
 	if (
 		// identifier, we do not need real identifier regarding ECMAScript/Unicode
-		trimmed.match(/^[_\p{L}][_0-9\p{L}]*$/iu) ||
+		/^[_\p{L}][_0-9\p{L}]*$/iu.test(trimmed) ||
 		// iife
 		// call expression
 		// expression in parentheses
-		trimmed.match(/^([_\p{L}][_0-9\p{L}]*)?\(.*\)$/iu)
+		/^([_\p{L}][_0-9\p{L}]*)?\(.*\)$/iu.test(trimmed)
 	)
 		return trimmed;
 
@@ -85,7 +86,7 @@ class RuntimeTemplate {
 	 */
 	constructor(compilation, outputOptions, requestShortener) {
 		this.compilation = compilation;
-		this.outputOptions = outputOptions || {};
+		this.outputOptions = /** @type {OutputOptions} */ (outputOptions || {});
 		this.requestShortener = requestShortener;
 		this.globalObject =
 			/** @type {string} */
@@ -104,56 +105,55 @@ class RuntimeTemplate {
 		return this.outputOptions.module;
 	}
 
+	isNeutralPlatform() {
+		return (
+			!this.outputOptions.environment.document &&
+			!this.compilation.compiler.platform.node
+		);
+	}
+
 	supportsConst() {
-		return /** @type {Environment} */ (this.outputOptions.environment).const;
+		return this.outputOptions.environment.const;
 	}
 
 	supportsArrowFunction() {
-		return /** @type {Environment} */ (this.outputOptions.environment)
-			.arrowFunction;
+		return this.outputOptions.environment.arrowFunction;
 	}
 
 	supportsAsyncFunction() {
-		return /** @type {Environment} */ (this.outputOptions.environment)
-			.asyncFunction;
+		return this.outputOptions.environment.asyncFunction;
 	}
 
 	supportsOptionalChaining() {
-		return /** @type {Environment} */ (this.outputOptions.environment)
-			.optionalChaining;
+		return this.outputOptions.environment.optionalChaining;
 	}
 
 	supportsForOf() {
-		return /** @type {Environment} */ (this.outputOptions.environment).forOf;
+		return this.outputOptions.environment.forOf;
 	}
 
 	supportsDestructuring() {
-		return /** @type {Environment} */ (this.outputOptions.environment)
-			.destructuring;
+		return this.outputOptions.environment.destructuring;
 	}
 
 	supportsBigIntLiteral() {
-		return /** @type {Environment} */ (this.outputOptions.environment)
-			.bigIntLiteral;
+		return this.outputOptions.environment.bigIntLiteral;
 	}
 
 	supportsDynamicImport() {
-		return /** @type {Environment} */ (this.outputOptions.environment)
-			.dynamicImport;
+		return this.outputOptions.environment.dynamicImport;
 	}
 
 	supportsEcmaScriptModuleSyntax() {
-		return /** @type {Environment} */ (this.outputOptions.environment).module;
+		return this.outputOptions.environment.module;
 	}
 
 	supportTemplateLiteral() {
-		return /** @type {Environment} */ (this.outputOptions.environment)
-			.templateLiteral;
+		return this.outputOptions.environment.templateLiteral;
 	}
 
 	supportNodePrefixForCoreModules() {
-		return /** @type {Environment} */ (this.outputOptions.environment)
-			.nodePrefixForCoreModules;
+		return this.outputOptions.environment.nodePrefixForCoreModules;
 	}
 
 	/**
@@ -314,7 +314,7 @@ class RuntimeTemplate {
 	 * Add a comment
 	 * @param {object} options Information content of the comment
 	 * @param {string=} options.request request string used originally
-	 * @param {string=} options.chunkName name of the chunk referenced
+	 * @param {(string | null)=} options.chunkName name of the chunk referenced
 	 * @param {string=} options.chunkReason reason information of the chunk
 	 * @param {string=} options.message additional message
 	 * @param {string=} options.exportName name of the export
@@ -335,10 +335,9 @@ class RuntimeTemplate {
 		}
 		if (!content) return "";
 		if (this.outputOptions.pathinfo) {
-			return Template.toComment(content) + " ";
-		} else {
-			return Template.toNormalComment(content) + " ";
+			return `${Template.toComment(content)} `;
 		}
+		return `${Template.toNormalComment(content)} `;
 	}
 
 	/**
@@ -412,11 +411,10 @@ class RuntimeTemplate {
 					: JSON.stringify(
 							`Module '${moduleId}' is not available (weak dependency)`
 						);
-		const comment = request ? Template.toNormalComment(request) + " " : "";
-		const errorStatements =
-			`var e = new Error(${errorMessage}); ` +
-			comment +
-			"e.code = 'MODULE_NOT_FOUND'; throw e;";
+		const comment = request ? `${Template.toNormalComment(request)} ` : "";
+		const errorStatements = `var e = new Error(${errorMessage}); ${
+			comment
+		}e.code = 'MODULE_NOT_FOUND'; throw e;`;
 		switch (type) {
 			case "statements":
 				return errorStatements;
@@ -778,7 +776,6 @@ class RuntimeTemplate {
 	}
 
 	/**
-	 *
 	 * @param {object} options options object
 	 * @param {boolean=} options.update whether a new variable should be created or the existing one updated
 	 * @param {Module} options.module the module
@@ -907,13 +904,13 @@ class RuntimeTemplate {
 					case "dynamic":
 						if (isCall) {
 							return `${importVar}_default()${propertyAccess(exportName, 1)}`;
-						} else {
-							return asiSafe
-								? `(${importVar}_default()${propertyAccess(exportName, 1)})`
-								: asiSafe === false
-									? `;(${importVar}_default()${propertyAccess(exportName, 1)})`
-									: `${importVar}_default.a${propertyAccess(exportName, 1)}`;
 						}
+						return asiSafe
+							? `(${importVar}_default()${propertyAccess(exportName, 1)})`
+							: asiSafe === false
+								? `;(${importVar}_default()${propertyAccess(exportName, 1)})`
+								: `${importVar}_default.a${propertyAccess(exportName, 1)}`;
+
 					case "default-only":
 					case "default-with-named":
 						exportName = exportName.slice(1);
@@ -921,10 +918,10 @@ class RuntimeTemplate {
 				}
 			} else if (exportName.length > 0) {
 				if (exportsType === "default-only") {
-					return (
-						"/* non-default import from non-esm module */undefined" +
-						propertyAccess(exportName, 1)
-					);
+					return `/* non-default import from non-esm module */undefined${propertyAccess(
+						exportName,
+						1
+					)}`;
 				} else if (
 					exportsType !== "namespace" &&
 					exportName[0] === "__esModule"
@@ -963,7 +960,7 @@ class RuntimeTemplate {
 			}
 			const comment = equals(used, exportName)
 				? ""
-				: Template.toNormalComment(propertyAccess(exportName)) + " ";
+				: `${Template.toNormalComment(propertyAccess(exportName))} `;
 			const access = `${importVar}${comment}${propertyAccess(used)}`;
 			if (isCall && callContext === false) {
 				return asiSafe
@@ -973,9 +970,8 @@ class RuntimeTemplate {
 						: `/*#__PURE__*/Object(${access})`;
 			}
 			return access;
-		} else {
-			return importVar;
 		}
+		return importVar;
 	}
 
 	/**
@@ -1040,9 +1036,8 @@ class RuntimeTemplate {
 			return `Promise.all(${comment.trim()}[${chunks
 				.map(requireChunkId)
 				.join(", ")}])`;
-		} else {
-			return `Promise.resolve(${comment.trim()})`;
 		}
+		return `Promise.resolve(${comment.trim()})`;
 	}
 
 	/**
@@ -1108,27 +1103,6 @@ class RuntimeTemplate {
 		runtimeRequirements.add(RuntimeGlobals.makeNamespaceObject);
 		runtimeRequirements.add(RuntimeGlobals.exports);
 		return `${RuntimeGlobals.makeNamespaceObject}(${exportsArgument});\n`;
-	}
-
-	/**
-	 * @param {object} options options object
-	 * @param {Module} options.module the module
-	 * @param {RuntimeSpec=} options.runtime runtime
-	 * @param {CodeGenerationResults} options.codeGenerationResults the code generation results
-	 * @returns {string} the url of the asset
-	 */
-	assetUrl({ runtime, module, codeGenerationResults }) {
-		if (!module) {
-			return "data:,";
-		}
-		const codeGen = codeGenerationResults.get(module, runtime);
-		const data = /** @type {NonNullable<CodeGenerationResult["data"]>} */ (
-			codeGen.data
-		);
-		const url = data.get("url");
-		if (url) return url.toString();
-		const assetPath = data.get("assetPathForCss");
-		return assetPath;
 	}
 }
 

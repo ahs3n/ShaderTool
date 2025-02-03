@@ -14,6 +14,7 @@ const SourceMapDevToolModuleOptionsPlugin = require("./SourceMapDevToolModuleOpt
 const createSchemaValidation = require("./util/create-schema-validation");
 const createHash = require("./util/createHash");
 const { relative, dirname } = require("./util/fs");
+const generateDebugId = require("./util/generateDebugId");
 const { makePathsAbsolute } = require("./util/identifier");
 
 /** @typedef {import("webpack-sources").MapOptions} MapOptions */
@@ -24,11 +25,12 @@ const { makePathsAbsolute } = require("./util/identifier");
 /** @typedef {import("./Chunk")} Chunk */
 /** @typedef {import("./Compilation").Asset} Asset */
 /** @typedef {import("./Compilation").AssetInfo} AssetInfo */
-/** @typedef {import("./Compilation").PathData} PathData */
 /** @typedef {import("./Compiler")} Compiler */
 /** @typedef {import("./Module")} Module */
 /** @typedef {import("./NormalModule").SourceMap} SourceMap */
+/** @typedef {import("./TemplatedPathPlugin").TemplatePath} TemplatePath */
 /** @typedef {import("./util/Hash")} Hash */
+/** @typedef {import("./util/createHash").Algorithm} Algorithm */
 /** @typedef {import("./util/fs").OutputFileSystem} OutputFileSystem */
 
 const validate = createSchemaValidation(
@@ -63,7 +65,6 @@ const URL_FORMATTING_REGEXP = /^\n\/\/(.*)$/;
  * For when `test` or `exec` is called on them
  * @param {RegExp} regexp Stateful Regular Expression to be reset
  * @returns {void}
- *
  */
 const resetRegexpState = regexp => {
 	regexp.lastIndex = -1;
@@ -74,9 +75,7 @@ const resetRegexpState = regexp => {
  * @param {string} str String to quote
  * @returns {string} Escaped string
  */
-const quoteMeta = str => {
-	return str.replace(METACHARACTERS_REGEXP, "\\$&");
-};
+const quoteMeta = str => str.replace(METACHARACTERS_REGEXP, "\\$&");
 
 /**
  * Creating {@link SourceMapTask} for given file
@@ -111,7 +110,7 @@ const getTaskForFile = (
 		source = asset.source();
 	}
 	if (!sourceMap || typeof source !== "string") return;
-	const context = compilation.options.context;
+	const context = /** @type {string} */ (compilation.options.context);
 	const root = compilation.compiler.root;
 	const cachedAbsolutify = makePathsAbsolute.bindContextCache(context, root);
 	const modules = sourceMap.sources.map(source => {
@@ -140,13 +139,13 @@ class SourceMapDevToolPlugin {
 	constructor(options = {}) {
 		validate(options);
 
-		/** @type {string | false} */
-		this.sourceMapFilename = options.filename;
-		/** @type {string | false | (function(PathData, AssetInfo=): string)}} */
+		this.sourceMapFilename = /** @type {string | false} */ (options.filename);
+		/** @type {false | TemplatePath}} */
 		this.sourceMappingURLComment =
 			options.append === false
 				? false
-				: options.append || "\n//# source" + "MappingURL=[url]";
+				: // eslint-disable-next-line no-useless-concat
+					options.append || "\n//# source" + "MappingURL=[url]";
 		/** @type {string | Function} */
 		this.moduleFilenameTemplate =
 			options.moduleFilenameTemplate || "webpack://[namespace]/[resourcePath]";
@@ -223,7 +222,7 @@ class SourceMapDevToolPlugin {
 						}
 					}
 
-					reportProgress(0.0);
+					reportProgress(0);
 					/** @type {SourceMapTask[]} */
 					const tasks = [];
 					let fileIndex = 0;
@@ -238,11 +237,17 @@ class SourceMapDevToolPlugin {
 								fileIndex++;
 								return callback();
 							}
+
+							const chunk = fileToChunk.get(file);
+							const sourceMapNamespace = compilation.getPath(this.namespace, {
+								chunk
+							});
+
 							const cacheItem = cache.getItemCache(
 								file,
 								cache.mergeEtags(
 									cache.getLazyHashedEtag(asset.source),
-									namespace
+									sourceMapNamespace
 								)
 							);
 
@@ -272,11 +277,8 @@ class SourceMapDevToolPlugin {
 										/**
 										 * Add file to chunk, if not presented there
 										 */
-										if (cachedFile !== file) {
-											const chunk = fileToChunk.get(file);
-											if (chunk !== undefined)
-												chunk.auxiliaryFiles.add(cachedFile);
-										}
+										if (cachedFile !== file && chunk !== undefined)
+											chunk.auxiliaryFiles.add(cachedFile);
 									}
 
 									reportProgress(
@@ -312,14 +314,23 @@ class SourceMapDevToolPlugin {
 
 									for (let idx = 0; idx < modules.length; idx++) {
 										const module = modules[idx];
+
+										if (
+											typeof module === "string" &&
+											/^(data|https?):/.test(module)
+										) {
+											moduleToSourceNameMapping.set(module, module);
+											continue;
+										}
+
 										if (!moduleToSourceNameMapping.get(module)) {
 											moduleToSourceNameMapping.set(
 												module,
 												ModuleFilenameHelpers.createFilename(
 													module,
 													{
-														moduleFilenameTemplate: moduleFilenameTemplate,
-														namespace: namespace
+														moduleFilenameTemplate,
+														namespace: sourceMapNamespace
 													},
 													{
 														requestShortener,
@@ -383,7 +394,7 @@ class SourceMapDevToolPlugin {
 									module,
 									{
 										moduleFilenameTemplate: fallbackModuleFilenameTemplate,
-										namespace: namespace
+										namespace
 									},
 									{
 										requestShortener,
@@ -429,7 +440,7 @@ class SourceMapDevToolPlugin {
 									const moduleFilenames = modules.map(m =>
 										moduleToSourceNameMapping.get(m)
 									);
-									sourceMap.sources = moduleFilenames;
+									sourceMap.sources = /** @type {string[]} */ (moduleFilenames);
 									if (options.noSources) {
 										sourceMap.sourcesContent = undefined;
 									}
@@ -444,21 +455,18 @@ class SourceMapDevToolPlugin {
 									// If SourceMap and asset uses contenthash, avoid a circular dependency by hiding hash in `file`
 									if (usesContentHash && task.assetInfo.contenthash) {
 										const contenthash = task.assetInfo.contenthash;
-										let pattern;
-										if (Array.isArray(contenthash)) {
-											pattern = contenthash.map(quoteMeta).join("|");
-										} else {
-											pattern = quoteMeta(contenthash);
-										}
+										const pattern = Array.isArray(contenthash)
+											? contenthash.map(quoteMeta).join("|")
+											: quoteMeta(contenthash);
 										sourceMap.file = sourceMap.file.replace(
 											new RegExp(pattern, "g"),
 											m => "x".repeat(m.length)
 										);
 									}
 
-									/** @type {string | false | (function(PathData, AssetInfo=): string)} */
+									/** @type {false | TemplatePath} */
 									let currentSourceMappingURLComment = sourceMappingURLComment;
-									let cssExtensionDetected =
+									const cssExtensionDetected =
 										CSS_EXTENSION_DETECT_REGEXP.test(file);
 									resetRegexpState(CSS_EXTENSION_DETECT_REGEXP);
 									if (
@@ -472,15 +480,26 @@ class SourceMapDevToolPlugin {
 												"\n/*$1*/"
 											);
 									}
+
+									if (options.debugIds) {
+										const debugId = generateDebugId(source, sourceMap.file);
+										sourceMap.debugId = debugId;
+										currentSourceMappingURLComment = `\n//# debugId=${debugId}${currentSourceMappingURLComment}`;
+									}
+
 									const sourceMapString = JSON.stringify(sourceMap);
 									if (sourceMapFilename) {
-										let filename = file;
+										const filename = file;
 										const sourceMapContentHash =
-											usesContentHash &&
-											/** @type {string} */ (
-												createHash(compilation.outputOptions.hashFunction)
-													.update(sourceMapString)
-													.digest("hex")
+											/** @type {string} */
+											(
+												usesContentHash &&
+													createHash(
+														/** @type {Algorithm} */
+														(compilation.outputOptions.hashFunction)
+													)
+														.update(sourceMapString)
+														.digest("hex")
 											);
 										const pathParams = {
 											chunk,
@@ -511,10 +530,10 @@ class SourceMapDevToolPlugin {
 											// Add source map url to compilation asset, if currentSourceMappingURLComment is set
 											asset = new ConcatSource(
 												asset,
-												compilation.getPath(
-													currentSourceMappingURLComment,
-													Object.assign({ url: sourceMapUrl }, pathParams)
-												)
+												compilation.getPath(currentSourceMappingURLComment, {
+													url: sourceMapUrl,
+													...pathParams
+												})
 											);
 										}
 										const assetInfo = {
@@ -584,7 +603,7 @@ class SourceMapDevToolPlugin {
 									});
 								},
 								err => {
-									reportProgress(1.0);
+									reportProgress(1);
 									callback(err);
 								}
 							);

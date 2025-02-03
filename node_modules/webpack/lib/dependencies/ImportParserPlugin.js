@@ -8,20 +8,20 @@
 const AsyncDependenciesBlock = require("../AsyncDependenciesBlock");
 const CommentCompilationWarning = require("../CommentCompilationWarning");
 const UnsupportedFeatureWarning = require("../UnsupportedFeatureWarning");
+const { getImportAttributes } = require("../javascript/JavascriptParser");
 const ContextDependencyHelpers = require("./ContextDependencyHelpers");
-const { getAttributes } = require("./HarmonyImportDependencyParserPlugin");
 const ImportContextDependency = require("./ImportContextDependency");
 const ImportDependency = require("./ImportDependency");
 const ImportEagerDependency = require("./ImportEagerDependency");
 const ImportWeakDependency = require("./ImportWeakDependency");
 
-/** @typedef {import("estree").ImportExpression} ImportExpression */
 /** @typedef {import("../../declarations/WebpackOptions").JavascriptParserOptions} JavascriptParserOptions */
 /** @typedef {import("../ChunkGroup").RawChunkGroupOptions} RawChunkGroupOptions */
 /** @typedef {import("../ContextModule").ContextMode} ContextMode */
 /** @typedef {import("../Dependency").DependencyLocation} DependencyLocation */
 /** @typedef {import("../Module").BuildMeta} BuildMeta */
 /** @typedef {import("../javascript/JavascriptParser")} JavascriptParser */
+/** @typedef {import("../javascript/JavascriptParser").ImportExpression} ImportExpression */
 /** @typedef {import("../javascript/JavascriptParser").Range} Range */
 
 class ImportParserPlugin {
@@ -85,7 +85,7 @@ class ImportParserPlugin {
 					parser.state.module.addWarning(
 						new CommentCompilationWarning(
 							`Compilation error while processing magic comment(-s): /*${comment.value}*/: ${e.message}`,
-							comment.loc
+							/** @type {DependencyLocation} */ (comment.loc)
 						)
 					);
 				}
@@ -100,11 +100,9 @@ class ImportParserPlugin {
 								/** @type {DependencyLocation} */ (expr.loc)
 							)
 						);
-					} else {
+					} else if (importOptions.webpackIgnore) {
 						// Do not instrument `import()` if `webpackIgnore` is `true`
-						if (importOptions.webpackIgnore) {
-							return false;
-						}
+						return false;
 					}
 				}
 				if (importOptions.webpackChunkName !== undefined) {
@@ -128,7 +126,7 @@ class ImportParserPlugin {
 							)
 						);
 					} else {
-						mode = importOptions.webpackMode;
+						mode = /** @type {ContextMode} */ (importOptions.webpackMode);
 					}
 				}
 				if (importOptions.webpackPrefetch !== undefined) {
@@ -164,7 +162,9 @@ class ImportParserPlugin {
 						typeof importOptions.webpackFetchPriority === "string" &&
 						["high", "low", "auto"].includes(importOptions.webpackFetchPriority)
 					) {
-						groupOptions.fetchPriority = importOptions.webpackFetchPriority;
+						groupOptions.fetchPriority =
+							/** @type {"low" | "high" | "auto"} */
+							(importOptions.webpackFetchPriority);
 					} else {
 						parser.state.module.addWarning(
 							new UnsupportedFeatureWarning(
@@ -220,12 +220,10 @@ class ImportParserPlugin {
 								/** @type {DependencyLocation} */ (expr.loc)
 							)
 						);
+					} else if (typeof importOptions.webpackExports === "string") {
+						exports = [[importOptions.webpackExports]];
 					} else {
-						if (typeof importOptions.webpackExports === "string") {
-							exports = [[importOptions.webpackExports]];
-						} else {
-							exports = exportsFromEnumerable(importOptions.webpackExports);
-						}
+						exports = exportsFromEnumerable(importOptions.webpackExports);
 					}
 				}
 			}
@@ -251,7 +249,7 @@ class ImportParserPlugin {
 				if (exports) {
 					parser.state.module.addWarning(
 						new UnsupportedFeatureWarning(
-							`\`webpackExports\` could not be used with destructuring assignment.`,
+							"`webpackExports` could not be used with destructuring assignment.",
 							/** @type {DependencyLocation} */ (expr.loc)
 						)
 					);
@@ -262,7 +260,7 @@ class ImportParserPlugin {
 			}
 
 			if (param.isString()) {
-				const attributes = getAttributes(expr);
+				const attributes = getImportAttributes(expr);
 
 				if (mode === "eager") {
 					const dep = new ImportEagerDependency(
@@ -296,45 +294,44 @@ class ImportParserPlugin {
 						attributes
 					);
 					dep.loc = /** @type {DependencyLocation} */ (expr.loc);
-					dep.optional = !!parser.scope.inTry;
+					dep.optional = Boolean(parser.scope.inTry);
 					depBlock.addDependency(dep);
 					parser.state.current.addBlock(depBlock);
 				}
 				return true;
-			} else {
-				if (mode === "weak") {
-					mode = "async-weak";
-				}
-				const dep = ContextDependencyHelpers.create(
-					ImportContextDependency,
-					/** @type {Range} */ (expr.range),
-					param,
-					expr,
-					this.options,
-					{
-						chunkName,
-						groupOptions,
-						include,
-						exclude,
-						mode,
-						namespaceObject: /** @type {BuildMeta} */ (
-							parser.state.module.buildMeta
-						).strictHarmonyModule
-							? "strict"
-							: true,
-						typePrefix: "import()",
-						category: "esm",
-						referencedExports: exports,
-						attributes: getAttributes(expr)
-					},
-					parser
-				);
-				if (!dep) return;
-				dep.loc = /** @type {DependencyLocation} */ (expr.loc);
-				dep.optional = !!parser.scope.inTry;
-				parser.state.current.addDependency(dep);
-				return true;
 			}
+			if (mode === "weak") {
+				mode = "async-weak";
+			}
+			const dep = ContextDependencyHelpers.create(
+				ImportContextDependency,
+				/** @type {Range} */ (expr.range),
+				param,
+				expr,
+				this.options,
+				{
+					chunkName,
+					groupOptions,
+					include,
+					exclude,
+					mode,
+					namespaceObject: /** @type {BuildMeta} */ (
+						parser.state.module.buildMeta
+					).strictHarmonyModule
+						? "strict"
+						: true,
+					typePrefix: "import()",
+					category: "esm",
+					referencedExports: exports,
+					attributes: getImportAttributes(expr)
+				},
+				parser
+			);
+			if (!dep) return;
+			dep.loc = /** @type {DependencyLocation} */ (expr.loc);
+			dep.optional = Boolean(parser.scope.inTry);
+			parser.state.current.addDependency(dep);
+			return true;
 		});
 	}
 }

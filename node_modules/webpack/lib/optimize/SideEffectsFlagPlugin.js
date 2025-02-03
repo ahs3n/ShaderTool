@@ -23,6 +23,8 @@ const formatLocation = require("../formatLocation");
 /** @typedef {import("../Dependency").DependencyLocation} DependencyLocation */
 /** @typedef {import("../Module")} Module */
 /** @typedef {import("../Module").BuildMeta} BuildMeta */
+/** @typedef {import("../ModuleGraphConnection")} ModuleGraphConnection */
+/** @typedef {import("../NormalModuleFactory").ModuleSettings} ModuleSettings */
 /** @typedef {import("../javascript/JavascriptParser")} JavascriptParser */
 /** @typedef {import("../javascript/JavascriptParser").Range} Range */
 
@@ -57,7 +59,7 @@ const globToRegexp = (glob, cache) => {
 	}
 	const baseRegexp = glob2regexp(glob, { globstar: true, extended: true });
 	const regexpSource = baseRegexp.source;
-	const regexp = new RegExp("^(\\./)?" + regexpSource.slice(1));
+	const regexp = new RegExp(`^(\\./)?${regexpSource.slice(1)}`);
 	cache.set(glob, regexp);
 	return regexp;
 };
@@ -71,6 +73,7 @@ class SideEffectsFlagPlugin {
 	constructor(analyseSource = true) {
 		this._analyseSource = analyseSource;
 	}
+
 	/**
 	 * Apply the plugin
 	 * @param {Compiler} compiler the compiler instance
@@ -110,11 +113,12 @@ class SideEffectsFlagPlugin {
 					return module;
 				});
 				normalModuleFactory.hooks.module.tap(PLUGIN_NAME, (module, data) => {
-					if (typeof data.settings.sideEffects === "boolean") {
+					const settings = /** @type {ModuleSettings} */ (data.settings);
+					if (typeof settings.sideEffects === "boolean") {
 						if (module.factoryMeta === undefined) {
 							module.factoryMeta = {};
 						}
-						module.factoryMeta.sideEffectFree = !data.settings.sideEffects;
+						module.factoryMeta.sideEffectFree = !settings.sideEffects;
 					}
 					return module;
 				});
@@ -210,7 +214,8 @@ class SideEffectsFlagPlugin {
 									case "ExportDefaultDeclaration":
 										if (
 											!parser.isPure(
-												statement.declaration,
+												/** @type {TODO} */
+												(statement.declaration),
 												/** @type {Range} */ (statement.range)[0]
 											)
 										) {
@@ -321,7 +326,9 @@ class SideEffectsFlagPlugin {
 															? [...exportName, ...ids.slice(1)]
 															: ids.slice(1)
 													);
-													return moduleGraph.getConnection(dep);
+													return /** @type {ModuleGraphConnection} */ (
+														moduleGraph.getConnection(dep)
+													);
 												}
 											);
 											continue;

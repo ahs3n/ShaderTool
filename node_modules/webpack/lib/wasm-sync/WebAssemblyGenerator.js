@@ -5,14 +5,14 @@
 
 "use strict";
 
-const { RawSource } = require("webpack-sources");
-const Generator = require("../Generator");
-const WebAssemblyUtils = require("./WebAssemblyUtils");
-
 const t = require("@webassemblyjs/ast");
 const { moduleContextFromModuleAST } = require("@webassemblyjs/ast");
 const { editWithAST, addWithAST } = require("@webassemblyjs/wasm-edit");
 const { decode } = require("@webassemblyjs/wasm-parser");
+const { RawSource } = require("webpack-sources");
+const Generator = require("../Generator");
+const { WEBASSEMBLY_TYPES } = require("../ModuleSourceTypesConstants");
+const WebAssemblyUtils = require("./WebAssemblyUtils");
 
 const WebAssemblyExportImportedDependency = require("../dependencies/WebAssemblyExportImportedDependency");
 
@@ -20,6 +20,7 @@ const WebAssemblyExportImportedDependency = require("../dependencies/WebAssembly
 /** @typedef {import("../DependencyTemplates")} DependencyTemplates */
 /** @typedef {import("../Generator").GenerateContext} GenerateContext */
 /** @typedef {import("../Module")} Module */
+/** @typedef {import("../Module").SourceTypes} SourceTypes */
 /** @typedef {import("../ModuleGraph")} ModuleGraph */
 /** @typedef {import("../NormalModule")} NormalModule */
 /** @typedef {import("../RuntimeTemplate")} RuntimeTemplate */
@@ -43,33 +44,27 @@ const WebAssemblyExportImportedDependency = require("../dependencies/WebAssembly
  * @param {((prev: ArrayBuffer) => ArrayBuffer)[]} fns transforms
  * @returns {Function} composed transform
  */
-const compose = (...fns) => {
-	return fns.reduce(
-		(prevFn, nextFn) => {
-			return value => nextFn(prevFn(value));
-		},
+const compose = (...fns) =>
+	fns.reduce(
+		(prevFn, nextFn) => value => nextFn(prevFn(value)),
 		value => value
 	);
-};
 
 /**
  * Removes the start instruction
- *
  * @param {object} state state
  * @param {object} state.ast Module's ast
  * @returns {ArrayBufferTransform} transform
  */
-const removeStartFunc = state => bin => {
-	return editWithAST(state.ast, bin, {
+const removeStartFunc = state => bin =>
+	editWithAST(state.ast, bin, {
 		Start(path) {
 			path.remove();
 		}
 	});
-};
 
 /**
  * Get imported globals
- *
  * @param {object} ast Module's AST
  * @returns {t.ModuleImport[]} - nodes
  */
@@ -90,7 +85,6 @@ const getImportedGlobals = ast => {
 
 /**
  * Get the count for imported func
- *
  * @param {object} ast Module's AST
  * @returns {number} - count
  */
@@ -110,7 +104,6 @@ const getCountImportedFunc = ast => {
 
 /**
  * Get next type index
- *
  * @param {object} ast Module's AST
  * @returns {t.Index} - index
  */
@@ -126,11 +119,9 @@ const getNextTypeIndex = ast => {
 
 /**
  * Get next func index
- *
  * The Func section metadata provide information for implemented funcs
  * in order to have the correct index we shift the index by number of external
  * functions.
- *
  * @param {object} ast Module's AST
  * @param {number} countImportedFunc number of imported funcs
  * @returns {t.Index} - index
@@ -163,9 +154,8 @@ const createDefaultInitForGlobal = globalType => {
 		return t.objectInstruction("const", globalType.valtype, [
 			t.floatLiteral(66, false, false, "66")
 		]);
-	} else {
-		throw new Error("unknown type: " + globalType.valtype);
 	}
+	throw new Error(`unknown type: ${globalType.valtype}`);
 };
 
 /**
@@ -177,7 +167,6 @@ const createDefaultInitForGlobal = globalType => {
  * indices will be preserved.
  *
  * Note that globals will become mutable.
- *
  * @param {object} state transformation state
  * @param {object} state.ast Module's ast
  * @param {t.Instruction[]} state.additionalInitCode list of addition instructions for the init function
@@ -258,8 +247,8 @@ const rewriteImportedGlobals = state => bin => {
  */
 const rewriteExportNames =
 	({ ast, moduleGraph, module, externalExports, runtime }) =>
-	bin => {
-		return editWithAST(ast, bin, {
+	bin =>
+		editWithAST(ast, bin, {
 			/**
 			 * @param {NodePath<ModuleExport>} path path
 			 */
@@ -279,7 +268,6 @@ const rewriteExportNames =
 				path.node.name = /** @type {string} */ (usedName);
 			}
 		});
-	};
 
 /**
  * Mangle import names and modules
@@ -290,14 +278,14 @@ const rewriteExportNames =
  */
 const rewriteImports =
 	({ ast, usedDependencyMap }) =>
-	bin => {
-		return editWithAST(ast, bin, {
+	bin =>
+		editWithAST(ast, bin, {
 			/**
 			 * @param {NodePath<ModuleImport>} path path
 			 */
 			ModuleImport(path) {
 				const result = usedDependencyMap.get(
-					path.node.module + ":" + path.node.name
+					`${path.node.module}:${path.node.name}`
 				);
 
 				if (result !== undefined) {
@@ -306,13 +294,11 @@ const rewriteImports =
 				}
 			}
 		});
-	};
 
 /**
  * Add an init function.
  *
  * The init function fills the globals given input arguments.
- *
  * @param {object} state transformation state
  * @param {object} state.ast Module's ast
  * @param {t.Identifier} state.initFuncId identifier of the init function
@@ -348,7 +334,7 @@ const addInitFunction =
 
 		/** @type {Instruction[]} */
 		const funcBody = [];
-		importedGlobals.forEach((importedGlobal, index) => {
+		for (const [index, _importedGlobal] of importedGlobals.entries()) {
 			const args = [t.indexLiteral(index)];
 			const body = [
 				t.instruction("get_local", args),
@@ -356,7 +342,7 @@ const addInitFunction =
 			];
 
 			funcBody.push(...body);
-		});
+		}
 
 		if (typeof startAtFuncOffset === "number") {
 			funcBody.push(
@@ -410,12 +396,10 @@ const getUsedDependencyMap = (moduleGraph, module, mangle) => {
 		const dep = usedDep.dependency;
 		const request = dep.request;
 		const exportName = dep.name;
-		map.set(request + ":" + exportName, usedDep);
+		map.set(`${request}:${exportName}`, usedDep);
 	}
 	return map;
 };
-
-const TYPES = new Set(["webassembly"]);
 
 /**
  * @typedef {object} WebAssemblyGeneratorOptions
@@ -433,10 +417,10 @@ class WebAssemblyGenerator extends Generator {
 
 	/**
 	 * @param {NormalModule} module fresh module
-	 * @returns {Set<string>} available types (do not mutate)
+	 * @returns {SourceTypes} available types (do not mutate)
 	 */
 	getTypes(module) {
-		return TYPES;
+		return WEBASSEMBLY_TYPES;
 	}
 
 	/**
@@ -455,7 +439,7 @@ class WebAssemblyGenerator extends Generator {
 	/**
 	 * @param {NormalModule} module module for which the code should be generated
 	 * @param {GenerateContext} generateContext context for generate
-	 * @returns {Source} generated code
+	 * @returns {Source | null} generated code
 	 */
 	generate(module, { moduleGraph, runtime }) {
 		const bin = /** @type {Source} */ (module.originalSource()).source();

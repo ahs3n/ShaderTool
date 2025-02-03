@@ -36,9 +36,8 @@ const IDENTIFIER_REGEX =
  * @param {string} name name to be validated
  * @returns {boolean} true, when valid
  */
-const isNameValid = name => {
-	return !KEYWORD_REGEX.test(name) && IDENTIFIER_REGEX.test(name);
-};
+const isNameValid = name =>
+	!KEYWORD_REGEX.test(name) && IDENTIFIER_REGEX.test(name);
 
 /**
  * @param {string[]} accessor variable plus properties
@@ -136,15 +135,14 @@ class AssignLibraryPlugin extends AbstractLibraryPlugin {
 					`Library name must be a string or string array. ${AbstractLibraryPlugin.COMMON_LIBRARY_NAME_MESSAGE}`
 				);
 			}
-		} else {
-			if (name && typeof name !== "string" && !Array.isArray(name)) {
-				throw new Error(
-					`Library name must be a string, string array or unset. ${AbstractLibraryPlugin.COMMON_LIBRARY_NAME_MESSAGE}`
-				);
-			}
+		} else if (name && typeof name !== "string" && !Array.isArray(name)) {
+			throw new Error(
+				`Library name must be a string, string array or unset. ${AbstractLibraryPlugin.COMMON_LIBRARY_NAME_MESSAGE}`
+			);
 		}
+		const _name = /** @type {string | string[]} */ (name);
 		return {
-			name: /** @type {string | string[]} */ (name),
+			name: _name,
 			export: library.export
 		};
 	}
@@ -332,7 +330,7 @@ class AssignLibraryPlugin extends AbstractLibraryPlugin {
 				exports = "__webpack_exports_export__";
 			}
 			result.add(
-				`for(var i in ${exports}) __webpack_export_target__[i] = ${exports}[i];\n`
+				`for(var __webpack_i__ in ${exports}) __webpack_export_target__[__webpack_i__] = ${exports}[__webpack_i__];\n`
 			);
 			result.add(
 				`if(${exports}.__esModule) Object.defineProperty(__webpack_export_target__, "__esModule", { value: true });\n`

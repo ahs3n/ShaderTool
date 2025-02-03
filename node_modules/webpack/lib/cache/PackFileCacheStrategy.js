@@ -98,7 +98,7 @@ const MAX_TIME_IN_FRESH_PACK = 1 * 60 * 1000; // 1 min
 class PackItemInfo {
 	/**
 	 * @param {string} identifier identifier of item
-	 * @param {string | null} etag etag of item
+	 * @param {string | null | undefined} etag etag of item
 	 * @param {any} value fresh value of item
 	 */
 	constructor(identifier, etag, value) {
@@ -160,19 +160,18 @@ class Pack {
 		const info = this.itemInfo.get(identifier);
 		this._addRequest(identifier);
 		if (info === undefined) {
-			return undefined;
+			return;
 		}
 		if (info.etag !== etag) return null;
 		info.lastAccess = Date.now();
 		const loc = info.location;
 		if (loc === -1) {
 			return info.freshValue;
-		} else {
-			if (!this.content[loc]) {
-				return undefined;
-			}
-			return /** @type {PackContent} */ (this.content[loc]).get(identifier);
 		}
+		if (!this.content[loc]) {
+			return;
+		}
+		return /** @type {PackContent} */ (this.content[loc]).get(identifier);
 	}
 
 	/**
@@ -269,20 +268,21 @@ class Pack {
 	}
 
 	_persistFreshContent() {
+		/** @typedef {{ items: Items, map: Map<string, any>, loc: number }} PackItem */
 		const itemsCount = this.freshContent.size;
 		if (itemsCount > 0) {
 			const packCount = Math.ceil(itemsCount / MAX_ITEMS_IN_FRESH_PACK);
 			const itemsPerPack = Math.ceil(itemsCount / packCount);
+			/** @type {PackItem[]} */
 			const packs = [];
 			let i = 0;
 			let ignoreNextTimeTick = false;
 			const createNextPack = () => {
 				const loc = this._findLocation();
-				this.content[loc] = null; // reserve
+				this.content[loc] = /** @type {EXPECTED_ANY} */ (null); // reserve
+				/** @type {PackItem} */
 				const pack = {
-					/** @type {Items} */
 					items: new Set(),
-					/** @type {Map<string, any>} */
 					map: new Map(),
 					loc
 				};
@@ -408,7 +408,9 @@ class Pack {
 				await content.unpack(
 					"it should be merged with other small pack contents"
 				);
-				for (const [identifier, value] of content.content) {
+				for (const [identifier, value] of /** @type {Content} */ (
+					content.content
+				)) {
 					map.set(identifier, value);
 				}
 			});
@@ -424,7 +426,7 @@ class Pack {
 				mergedItems,
 				mergedUsedItems,
 				memoize(async () => {
-					/** @type {Map<string, any>} */
+					/** @type {Content} */
 					const map = new Map();
 					await Promise.all(addToMergedMap.map(fn => fn(map)));
 					return new PackContentItems(map);
@@ -472,7 +474,11 @@ class Pack {
 							);
 							const map = new Map();
 							for (const identifier of usedItems) {
-								map.set(identifier, content.content.get(identifier));
+								map.set(
+									identifier,
+									/** @type {Content} */
+									(content.content).get(identifier)
+								);
 							}
 							return new PackContentItems(map);
 						}
@@ -499,7 +505,11 @@ class Pack {
 							);
 							const map = new Map();
 							for (const identifier of unusedItems) {
-								map.set(identifier, content.content.get(identifier));
+								map.set(
+									identifier,
+									/** @type {Content} */
+									(content.content).get(identifier)
+								);
 							}
 							return new PackContentItems(map);
 						}
@@ -528,7 +538,7 @@ class Pack {
 	 */
 	_gcOldestContent() {
 		/** @type {PackItemInfo | undefined} */
-		let oldest = undefined;
+		let oldest;
 		for (const info of this.itemInfo.values()) {
 			if (oldest === undefined || info.lastAccess < oldest.lastAccess) {
 				oldest = info;
@@ -553,7 +563,11 @@ class Pack {
 							);
 							const map = new Map();
 							for (const identifier of items) {
-								map.set(identifier, content.content.get(identifier));
+								map.set(
+									identifier,
+									/** @type {Content} */
+									(content.content).get(identifier)
+								);
 							}
 							return new PackContentItems(map);
 						})
@@ -634,7 +648,8 @@ class Pack {
 					)
 				);
 				for (const identifier of items) {
-					this.itemInfo.get(identifier).location = idx;
+					/** @type {PackItemInfo} */
+					(this.itemInfo.get(identifier)).location = idx;
 				}
 			}
 			items = read();
@@ -644,9 +659,11 @@ class Pack {
 
 makeSerializable(Pack, "webpack/lib/cache/PackFileCacheStrategy", "Pack");
 
+/** @typedef {Map<string, any>} Content */
+
 class PackContentItems {
 	/**
-	 * @param {Map<string, any>} map items
+	 * @param {Content} map items
 	 */
 	constructor(map) {
 		this.map = map;
@@ -677,16 +694,21 @@ class PackContentItems {
 							logger.log(`Serialization of '${key}': ${duration} ms`);
 						else logger.debug(`Serialization of '${key}': ${duration} ms`);
 					}
-				} catch (e) {
+				} catch (err) {
 					rollback(s);
-					if (e === NOT_SERIALIZABLE) continue;
+					if (err === NOT_SERIALIZABLE) continue;
 					const msg = "Skipped not serializable cache item";
-					if (e.message.includes("ModuleBuildError")) {
-						logger.log(`${msg} (in build error): ${e.message}`);
-						logger.debug(`${msg} '${key}' (in build error): ${e.stack}`);
+					const notSerializableErr = /** @type {Error} */ (err);
+					if (notSerializableErr.message.includes("ModuleBuildError")) {
+						logger.log(
+							`${msg} (in build error): ${notSerializableErr.message}`
+						);
+						logger.debug(
+							`${msg} '${key}' (in build error): ${notSerializableErr.stack}`
+						);
 					} else {
-						logger.warn(`${msg}: ${e.message}`);
-						logger.debug(`${msg} '${key}': ${e.stack}`);
+						logger.warn(`${msg}: ${notSerializableErr.message}`);
+						logger.debug(`${msg} '${key}': ${notSerializableErr.stack}`);
 					}
 				}
 			}
@@ -698,7 +720,7 @@ class PackContentItems {
 		try {
 			write(true);
 			write(this.map);
-		} catch (e) {
+		} catch (_err) {
 			rollback(s);
 
 			// Try to serialize each item on it's own
@@ -708,13 +730,14 @@ class PackContentItems {
 				try {
 					write(key);
 					write(value);
-				} catch (e) {
+				} catch (err) {
 					rollback(s);
-					if (e === NOT_SERIALIZABLE) continue;
+					if (err === NOT_SERIALIZABLE) continue;
+					const notSerializableErr = /** @type {Error} */ (err);
 					logger.warn(
-						`Skipped not serializable cache item '${key}': ${e.message}`
+						`Skipped not serializable cache item '${key}': ${notSerializableErr.message}`
 					);
-					logger.debug(e.stack);
+					logger.debug(notSerializableErr.stack);
 				}
 			}
 			write(null);
@@ -768,6 +791,8 @@ makeSerializable(
 	"PackContentItems"
 );
 
+/** @typedef {(function(): Promise<PackContentItems> | PackContentItems)} LazyFn */
+
 class PackContent {
 	/*
 		This class can be in these states:
@@ -797,9 +822,9 @@ class PackContent {
 	 */
 	constructor(items, usedItems, dataOrFn, logger, lazyName) {
 		this.items = items;
-		/** @type {(function(): Promise<PackContentItems> | PackContentItems) | undefined} */
+		/** @type {LazyFn | undefined} */
 		this.lazy = typeof dataOrFn === "function" ? dataOrFn : undefined;
-		/** @type {Map<string, any> | undefined} */
+		/** @type {Content | undefined} */
 		this.content = typeof dataOrFn === "function" ? undefined : dataOrFn.map;
 		this.outdated = false;
 		this.used = usedItems;
@@ -817,6 +842,7 @@ class PackContent {
 			return this.content.get(identifier);
 		}
 
+		const logger = /** @type {Logger} */ (this.logger);
 		// We are in state B
 		const { lazyName } = this;
 		/** @type {string | undefined} */
@@ -827,35 +853,41 @@ class PackContent {
 			timeMessage = `restore cache content ${lazyName} (${formatSize(
 				this.getSize()
 			)})`;
-			this.logger.log(
+			logger.log(
 				`starting to restore cache content ${lazyName} (${formatSize(
 					this.getSize()
 				)}) because of request to: ${identifier}`
 			);
-			this.logger.time(timeMessage);
+			logger.time(timeMessage);
 		}
-		const value = this.lazy();
+		const value = /** @type {LazyFn} */ (this.lazy)();
 		if ("then" in value) {
 			return value.then(data => {
 				const map = data.map;
 				if (timeMessage) {
-					this.logger.timeEnd(timeMessage);
+					logger.timeEnd(timeMessage);
 				}
 				// Move to state C
 				this.content = map;
-				this.lazy = SerializerMiddleware.unMemoizeLazy(this.lazy);
+				this.lazy = SerializerMiddleware.unMemoizeLazy(
+					/** @type {LazyFn} */
+					(this.lazy)
+				);
 				return map.get(identifier);
 			});
-		} else {
-			const map = value.map;
-			if (timeMessage) {
-				this.logger.timeEnd(timeMessage);
-			}
-			// Move to state C
-			this.content = map;
-			this.lazy = SerializerMiddleware.unMemoizeLazy(this.lazy);
-			return map.get(identifier);
 		}
+
+		const map = value.map;
+		if (timeMessage) {
+			logger.timeEnd(timeMessage);
+		}
+		// Move to state C
+		this.content = map;
+		this.lazy = SerializerMiddleware.unMemoizeLazy(
+			/** @type {LazyFn} */
+			(this.lazy)
+		);
+		return map.get(identifier);
 	}
 
 	/**
@@ -865,6 +897,7 @@ class PackContent {
 	unpack(reason) {
 		if (this.content) return;
 
+		const logger = /** @type {Logger} */ (this.logger);
 		// Move from state B to C
 		if (this.lazy) {
 			const { lazyName } = this;
@@ -876,27 +909,26 @@ class PackContent {
 				timeMessage = `unpack cache content ${lazyName} (${formatSize(
 					this.getSize()
 				)})`;
-				this.logger.log(
+				logger.log(
 					`starting to unpack cache content ${lazyName} (${formatSize(
 						this.getSize()
 					)}) because ${reason}`
 				);
-				this.logger.time(timeMessage);
+				logger.time(timeMessage);
 			}
 			const value = this.lazy();
 			if ("then" in value) {
 				return value.then(data => {
 					if (timeMessage) {
-						this.logger.timeEnd(timeMessage);
+						logger.timeEnd(timeMessage);
 					}
 					this.content = data.map;
 				});
-			} else {
-				if (timeMessage) {
-					this.logger.timeEnd(timeMessage);
-				}
-				this.content = value.map;
 			}
+			if (timeMessage) {
+				logger.timeEnd(timeMessage);
+			}
+			this.content = value.map;
 		}
 	}
 
@@ -944,7 +976,7 @@ class PackContent {
 		}
 		if (this.content) {
 			// State A2 or C2
-			/** @type {Map<string, any>} */
+			/** @type {Content} */
 			const map = new Map();
 			for (const item of this.items) {
 				map.set(item, this.content.get(item));
@@ -957,6 +989,7 @@ class PackContent {
 			);
 			return;
 		}
+		const logger = /** @type {Logger} */ (this.logger);
 		// State B2
 		const { lazyName } = this;
 		/** @type {string | undefined} */
@@ -967,31 +1000,34 @@ class PackContent {
 			timeMessage = `unpack cache content ${lazyName} (${formatSize(
 				this.getSize()
 			)})`;
-			this.logger.log(
+			logger.log(
 				`starting to unpack cache content ${lazyName} (${formatSize(
 					this.getSize()
 				)}) because it's outdated and need to be serialized`
 			);
-			this.logger.time(timeMessage);
+			logger.time(timeMessage);
 		}
-		const value = this.lazy();
+		const value = /** @type {LazyFn} */ (this.lazy)();
 		this.outdated = false;
 		if ("then" in value) {
 			// Move to state B1
 			this.lazy = write(() =>
 				value.then(data => {
 					if (timeMessage) {
-						this.logger.timeEnd(timeMessage);
+						logger.timeEnd(timeMessage);
 					}
 					const oldMap = data.map;
-					/** @type {Map<string, any>} */
+					/** @type {Content} */
 					const map = new Map();
 					for (const item of this.items) {
 						map.set(item, oldMap.get(item));
 					}
 					// Move to state C1 (or maybe C2)
 					this.content = map;
-					this.lazy = SerializerMiddleware.unMemoizeLazy(this.lazy);
+					this.lazy = SerializerMiddleware.unMemoizeLazy(
+						/** @type {LazyFn} */
+						(this.lazy)
+					);
 
 					return new PackContentItems(map);
 				})
@@ -999,10 +1035,10 @@ class PackContent {
 		} else {
 			// Move to state C1
 			if (timeMessage) {
-				this.logger.timeEnd(timeMessage);
+				logger.timeEnd(timeMessage);
 			}
 			const oldMap = value.map;
-			/** @type {Map<string, any>} */
+			/** @type {Content} */
 			const map = new Map();
 			for (const item of this.items) {
 				map.set(item, oldMap.get(item));
@@ -1148,19 +1184,19 @@ class PackFileCacheStrategy {
 			})
 			.then(packContainer => {
 				logger.timeEnd("restore cache container");
-				if (!packContainer) return undefined;
+				if (!packContainer) return;
 				if (!(packContainer instanceof PackContainer)) {
 					logger.warn(
 						`Restored pack from ${cacheLocation}${this._extension}, but contained content is unexpected.`,
 						packContainer
 					);
-					return undefined;
+					return;
 				}
 				if (packContainer.version !== version) {
 					logger.log(
 						`Restored pack from ${cacheLocation}${this._extension}, but version doesn't match.`
 					);
-					return undefined;
+					return;
 				}
 				logger.time("check build dependencies");
 				return Promise.all([
@@ -1321,7 +1357,7 @@ class PackFileCacheStrategy {
 				pack.stopCapturingRequests();
 				if (!pack.invalid) return;
 				this.packPromise = undefined;
-				this.logger.log(`Storing pack...`);
+				this.logger.log("Storing pack...");
 				let promise;
 				const newBuildDependencies = new Set();
 				for (const dep of this.newBuildDependencies) {
@@ -1439,7 +1475,7 @@ class PackFileCacheStrategy {
 				}
 				return promise.then(() => {
 					if (reportProgress) reportProgress(0.8, "serialize pack");
-					this.logger.time(`store pack`);
+					this.logger.time("store pack");
 					const updatedBuildDependencies = new Set(this.buildDependencies);
 					for (const dep of newBuildDependencies) {
 						updatedBuildDependencies.add(dep);
@@ -1447,10 +1483,13 @@ class PackFileCacheStrategy {
 					const content = new PackContainer(
 						pack,
 						this.version,
-						/** @type {Snapshot} */ (this.buildSnapshot),
+						/** @type {Snapshot} */
+						(this.buildSnapshot),
 						updatedBuildDependencies,
-						this.resolveResults,
-						this.resolveBuildDependenciesSnapshot
+						/** @type {ResolveResults} */
+						(this.resolveResults),
+						/** @type {Snapshot} */
+						(this.resolveBuildDependenciesSnapshot)
 					);
 					return this.fileSerializer
 						.serialize(content, {
@@ -1464,7 +1503,7 @@ class PackFileCacheStrategy {
 								this.buildDependencies.add(dep);
 							}
 							this.newBuildDependencies.clear();
-							this.logger.timeEnd(`store pack`);
+							this.logger.timeEnd("store pack");
 							const stats = pack.getContentStats();
 							this.logger.log(
 								"Stored pack (%d items, %d files, %d MiB)",
@@ -1474,7 +1513,7 @@ class PackFileCacheStrategy {
 							);
 						})
 						.catch(err => {
-							this.logger.timeEnd(`store pack`);
+							this.logger.timeEnd("store pack");
 							this.logger.warn(`Caching failed for pack: ${err}`);
 							this.logger.debug(err.stack);
 						});

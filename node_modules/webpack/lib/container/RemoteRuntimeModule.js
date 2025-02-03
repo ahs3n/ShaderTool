@@ -12,6 +12,7 @@ const Template = require("../Template");
 /** @typedef {import("../Chunk")} Chunk */
 /** @typedef {import("../Chunk").ChunkId} ChunkId */
 /** @typedef {import("../ChunkGraph")} ChunkGraph */
+/** @typedef {import("../ChunkGraph").ModuleId} ModuleId */
 /** @typedef {import("../Compilation")} Compilation */
 /** @typedef {import("./RemoteModule")} RemoteModule */
 
@@ -29,27 +30,31 @@ class RemoteRuntimeModule extends RuntimeModule {
 		const { runtimeTemplate, moduleGraph } = compilation;
 		/** @type {Record<ChunkId, (string | number)[]>} */
 		const chunkToRemotesMapping = {};
-		/** @type {Record<string | number, [string, string, string | number | null]>} */
+		/** @type {Record<ModuleId, [string, string, string | number | null]>} */
 		const idToExternalAndNameMapping = {};
-		for (const chunk of /** @type {Chunk} */ (this.chunk).getAllAsyncChunks()) {
+		for (const chunk of /** @type {Chunk} */ (
+			this.chunk
+		).getAllReferencedChunks()) {
 			const modules = chunkGraph.getChunkModulesIterableBySourceType(
 				chunk,
 				"remote"
 			);
 			if (!modules) continue;
-			/** @type {(string | number)[]} */
+			/** @type {ModuleId[]} */
 			const remotes = (chunkToRemotesMapping[
-				/** @type {ChunkId} */ (chunk.id)
+				/** @type {ChunkId} */
+				(chunk.id)
 			] = []);
 			for (const m of modules) {
 				const module = /** @type {RemoteModule} */ (m);
 				const name = module.internalRequest;
-				const id = chunkGraph.getModuleId(module);
+				const id = /** @type {ModuleId} */ (chunkGraph.getModuleId(module));
 				const shareScope = module.shareScope;
 				const dep = module.dependencies[0];
 				const externalModule = moduleGraph.getModule(dep);
 				const externalModuleId =
-					externalModule && chunkGraph.getModuleId(externalModule);
+					/** @type {ModuleId} */
+					(externalModule && chunkGraph.getModuleId(externalModule));
 				remotes.push(id);
 				idToExternalAndNameMapping[id] = [shareScope, name, externalModuleId];
 			}
@@ -76,12 +81,12 @@ class RemoteRuntimeModule extends RuntimeModule {
 						"var data = idToExternalAndNameMapping[id];",
 						"if(getScope.indexOf(data) >= 0) return;",
 						"getScope.push(data);",
-						`if(data.p) return promises.push(data.p);`,
+						"if(data.p) return promises.push(data.p);",
 						`var onError = ${runtimeTemplate.basicFunction("error", [
 							'if(!error) error = new Error("Container missing");',
 							'if(typeof error.message === "string")',
 							Template.indent(
-								`error.message += '\\nwhile loading "' + data[1] + '" from ' + data[2];`
+								"error.message += '\\nwhile loading \"' + data[1] + '\" from ' + data[2];"
 							),
 							`${
 								RuntimeGlobals.moduleFactories
@@ -100,7 +105,7 @@ class RemoteRuntimeModule extends RuntimeModule {
 											"next(result, d)",
 											"result"
 										)}, onError);`,
-										`if(first) promises.push(data.p = p); else return p;`
+										"if(first) promises.push(data.p = p); else return p;"
 									]),
 									"} else {",
 									Template.indent(["return next(promise, d, first);"]),
@@ -116,7 +121,7 @@ class RemoteRuntimeModule extends RuntimeModule {
 							"external, _, first"
 						)};`,
 						`var onInitialized = ${runtimeTemplate.returningFunction(
-							`handleFunction(external.get, data[1], getScope, 0, onFactory, first)`,
+							"handleFunction(external.get, data[1], getScope, 0, onFactory, first)",
 							"_, external, first"
 						)};`,
 						`var onFactory = ${runtimeTemplate.basicFunction("factory", [

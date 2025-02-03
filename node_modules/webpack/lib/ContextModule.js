@@ -9,6 +9,7 @@ const { OriginalSource, RawSource } = require("webpack-sources");
 const AsyncDependenciesBlock = require("./AsyncDependenciesBlock");
 const { makeWebpackError } = require("./HookWebpackError");
 const Module = require("./Module");
+const { JS_TYPES } = require("./ModuleSourceTypesConstants");
 const { JAVASCRIPT_MODULE_TYPE_DYNAMIC } = require("./ModuleTypeConstants");
 const RuntimeGlobals = require("./RuntimeGlobals");
 const Template = require("./Template");
@@ -30,19 +31,20 @@ const makeSerializable = require("./util/makeSerializable");
 /** @typedef {import("webpack-sources").Source} Source */
 /** @typedef {import("../declarations/WebpackOptions").WebpackOptionsNormalized} WebpackOptions */
 /** @typedef {import("./Chunk")} Chunk */
+/** @typedef {import("./Chunk").ChunkId} ChunkId */
 /** @typedef {import("./ChunkGraph")} ChunkGraph */
 /** @typedef {import("./ChunkGraph").ModuleId} ModuleId */
 /** @typedef {import("./ChunkGroup").RawChunkGroupOptions} RawChunkGroupOptions */
 /** @typedef {import("./Compilation")} Compilation */
 /** @typedef {import("./Dependency")} Dependency */
 /** @typedef {import("./DependencyTemplates")} DependencyTemplates */
+/** @typedef {import("./Generator").SourceTypes} SourceTypes */
 /** @typedef {import("./Module").BuildInfo} BuildInfo */
 /** @typedef {import("./Module").BuildMeta} BuildMeta */
 /** @typedef {import("./Module").CodeGenerationContext} CodeGenerationContext */
 /** @typedef {import("./Module").CodeGenerationResult} CodeGenerationResult */
 /** @typedef {import("./Module").LibIdentOptions} LibIdentOptions */
 /** @typedef {import("./Module").NeedBuildContext} NeedBuildContext */
-/** @typedef {import("./Module").SourceTypes} SourceTypes */
 /** @typedef {import("./ModuleGraph")} ModuleGraph */
 /** @typedef {import("./RequestShortener")} RequestShortener */
 /** @typedef {import("./ResolverFactory").ResolverWithOptions} ResolverWithOptions */
@@ -61,11 +63,11 @@ const makeSerializable = require("./util/makeSerializable");
  * @property {ContextMode} mode
  * @property {boolean} recursive
  * @property {RegExp} regExp
- * @property {"strict"|boolean=} namespaceObject
+ * @property {("strict" | boolean)=} namespaceObject
  * @property {string=} addon
- * @property {string=} chunkName
- * @property {RegExp=} include
- * @property {RegExp=} exclude
+ * @property {(string | null)=} chunkName
+ * @property {(RegExp | null)=} include
+ * @property {(RegExp | null)=} exclude
  * @property {RawChunkGroupOptions=} groupOptions
  * @property {string=} typePrefix
  * @property {string=} category
@@ -86,7 +88,7 @@ const makeSerializable = require("./util/makeSerializable");
 
 /**
  * @callback ResolveDependenciesCallback
- * @param {(Error | null)=} err
+ * @param {Error | null} err
  * @param {ContextElementDependency[]=} dependencies
  */
 
@@ -99,11 +101,9 @@ const makeSerializable = require("./util/makeSerializable");
 
 /** @typedef {1 | 3 | 7 | 9} FakeMapType */
 
-/** @typedef {Map<string, string | number> | FakeMapType} FakeMap */
+/** @typedef {Record<ModuleId, FakeMapType>} FakeMap */
 
 const SNAPSHOT_OPTIONS = { timestamp: true };
-
-const TYPES = new Set(["javascript"]);
 
 class ContextModule extends Module {
 	/**
@@ -159,7 +159,7 @@ class ContextModule extends Module {
 	 * @returns {SourceTypes} types available (do not mutate)
 	 */
 	getSourceTypes() {
-		return TYPES;
+		return JS_TYPES;
 	}
 
 	/**
@@ -192,7 +192,7 @@ class ContextModule extends Module {
 	_prettyRegExp(regexString, stripSlash = true) {
 		const str = stripSlash
 			? regexString.source + regexString.flags
-			: regexString + "";
+			: `${regexString}`;
 		return str.replace(/!/g, "%21").replace(/\|/g, "%7C");
 	}
 
@@ -272,15 +272,15 @@ class ContextModule extends Module {
 	readableIdentifier(requestShortener) {
 		let identifier;
 		if (this.context) {
-			identifier = requestShortener.shorten(this.context) + "/";
+			identifier = `${requestShortener.shorten(this.context)}/`;
 		} else if (
 			typeof this.options.resource === "string" ||
 			this.options.resource === false
 		) {
-			identifier = requestShortener.shorten(`${this.options.resource}`) + "/";
+			identifier = `${requestShortener.shorten(`${this.options.resource}`)}/`;
 		} else {
 			identifier = this.options.resource
-				.map(r => requestShortener.shorten(r) + "/")
+				.map(r => `${requestShortener.shorten(r)}/`)
 				.join(" ");
 		}
 		if (this.options.resourceQuery) {
@@ -565,7 +565,7 @@ class ContextModule extends Module {
 		} else if (typeof this.options.resource === "string") {
 			contextDependencies.add(this.options.resource);
 		} else if (this.options.resource === false) {
-			return;
+			// Do nothing
 		} else {
 			for (const res of this.options.resource) contextDependencies.add(res);
 		}
@@ -602,7 +602,7 @@ class ContextModule extends Module {
 	/**
 	 * @param {Dependency[]} dependencies all dependencies
 	 * @param {ChunkGraph} chunkGraph chunk graph
-	 * @returns {FakeMap} fake map
+	 * @returns {FakeMap | FakeMapType} fake map
 	 */
 	getFakeMap(dependencies, chunkGraph) {
 		if (!this.options.namespaceObject) {
@@ -621,13 +621,14 @@ class ContextModule extends Module {
 			)
 			.filter(Boolean)
 			.sort(comparator);
+		/** @type {FakeMap} */
 		const fakeMap = Object.create(null);
 		for (const module of sortedModules) {
 			const exportsType = module.getExportsType(
 				moduleGraph,
 				this.options.namespaceObject === "strict"
 			);
-			const id = chunkGraph.getModuleId(module);
+			const id = /** @type {ModuleId} */ (chunkGraph.getModuleId(module));
 			switch (exportsType) {
 				case "namespace":
 					fakeMap[id] = 9;
@@ -668,7 +669,7 @@ class ContextModule extends Module {
 	}
 
 	/**
-	 * @param {FakeMap} fakeMap fake map
+	 * @param {FakeMap | FakeMapType} fakeMap fake map
 	 * @returns {string} fake map init statement
 	 */
 	getFakeMapInitStatement(fakeMap) {
@@ -692,7 +693,7 @@ class ContextModule extends Module {
 	}
 
 	/**
-	 * @param {FakeMap} fakeMap fake map
+	 * @param {FakeMap | FakeMapType} fakeMap fake map
 	 * @param {boolean=} asyncModule us async module
 	 * @param {string=} fakeMapDataExpression fake map data expression
 	 * @returns {string} module object source
@@ -944,15 +945,19 @@ module.exports = webpackAsyncContext;`;
 			chunkGraph
 		);
 		const hasFakeMap = typeof fakeMap === "object";
+		/** @typedef {{userRequest: string, dependency: ContextElementDependency, chunks: undefined | Chunk[], module: Module, block: AsyncDependenciesBlock}} Item */
+		/**
+		 * @type {Item[]}
+		 */
 		const items = blocks
 			.map(block => {
 				const dependency =
 					/** @type {ContextElementDependency} */
 					(block.dependencies[0]);
 				return {
-					dependency: dependency,
+					dependency,
 					module: /** @type {Module} */ (moduleGraph.getModule(dependency)),
-					block: block,
+					block,
 					userRequest: dependency.userRequest,
 					chunks: undefined
 				};
@@ -974,18 +979,23 @@ module.exports = webpackAsyncContext;`;
 			if (a.userRequest === b.userRequest) return 0;
 			return a.userRequest < b.userRequest ? -1 : 1;
 		});
+		/** @type {Record<string, ModuleId | (ModuleId[] | ChunkId[])>} */
 		const map = Object.create(null);
 		for (const item of sortedItems) {
-			const moduleId = chunkGraph.getModuleId(item.module);
+			const moduleId =
+				/** @type {ModuleId} */
+				(chunkGraph.getModuleId(item.module));
 			if (shortMode) {
 				map[item.userRequest] = moduleId;
 			} else {
+				/** @type {(ModuleId | ChunkId)[]} */
 				const arrayStart = [moduleId];
 				if (hasFakeMap) {
 					arrayStart.push(fakeMap[moduleId]);
 				}
 				map[item.userRequest] = arrayStart.concat(
-					item.chunks.map(chunk => chunk.id)
+					/** @type {Chunk[]} */
+					(item.chunks).map(chunk => /** @type {ChunkId} */ (chunk.id))
 				);
 			}
 		}
@@ -1086,7 +1096,7 @@ module.exports = webpackEmptyAsyncContext;`;
 	 * @returns {string} the source code
 	 */
 	getSourceString(asyncMode, { runtimeTemplate, chunkGraph }) {
-		const id = chunkGraph.getModuleId(this);
+		const id = /** @type {ModuleId} */ (chunkGraph.getModuleId(this));
 		if (asyncMode === "lazy") {
 			if (this.blocks && this.blocks.length > 0) {
 				return this.getLazySource(this.blocks, id, {
@@ -1124,10 +1134,12 @@ module.exports = webpackEmptyAsyncContext;`;
 			}
 			return this.getSourceForEmptyAsyncContext(id, runtimeTemplate);
 		}
-		if (asyncMode === "weak") {
-			if (this.dependencies && this.dependencies.length > 0) {
-				return this.getWeakSyncSource(this.dependencies, id, chunkGraph);
-			}
+		if (
+			asyncMode === "weak" &&
+			this.dependencies &&
+			this.dependencies.length > 0
+		) {
+			return this.getWeakSyncSource(this.dependencies, id, chunkGraph);
 		}
 		if (this.dependencies && this.dependencies.length > 0) {
 			return this.getSyncSource(this.dependencies, id, chunkGraph);

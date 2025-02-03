@@ -65,12 +65,13 @@ const memoize = require("./util/memoize");
 /** @typedef {import("./Module").KnownBuildInfo} KnownBuildInfo */
 /** @typedef {import("./Module").LibIdentOptions} LibIdentOptions */
 /** @typedef {import("./Module").NeedBuildContext} NeedBuildContext */
-/** @typedef {import("./Module").SourceTypes} SourceTypes */
+/** @typedef {import("./Generator").SourceTypes} SourceTypes */
 /** @typedef {import("./Module").UnsafeCacheData} UnsafeCacheData */
 /** @typedef {import("./ModuleGraph")} ModuleGraph */
 /** @typedef {import("./ModuleGraphConnection").ConnectionState} ConnectionState */
 /** @typedef {import("./ModuleTypeConstants").JavaScriptModuleTypes} JavaScriptModuleTypes */
 /** @typedef {import("./NormalModuleFactory")} NormalModuleFactory */
+/** @typedef {import("./NormalModuleFactory").ResourceDataWithData} ResourceDataWithData */
 /** @typedef {import("./Parser")} Parser */
 /** @typedef {import("./RequestShortener")} RequestShortener */
 /** @typedef {import("./ResolverFactory").ResolveContext} ResolveContext */
@@ -82,11 +83,26 @@ const memoize = require("./util/memoize");
 /** @typedef {import("./util/Hash")} Hash */
 /** @typedef {import("./util/fs").InputFileSystem} InputFileSystem */
 /** @typedef {import("./util/runtime").RuntimeSpec} RuntimeSpec */
+/** @typedef {import("./util/createHash").Algorithm} Algorithm */
+/**
+ * @template T
+ * @typedef {import("./util/deprecation").FakeHook<T>} FakeHook
+ */
 
 /** @typedef {{[k: string]: any}} ParserOptions */
 /** @typedef {{[k: string]: any}} GeneratorOptions */
 
 /** @typedef {UnsafeCacheData & { parser: undefined | Parser, parserOptions: undefined | ParserOptions, generator: undefined | Generator, generatorOptions: undefined | GeneratorOptions }} NormalModuleUnsafeCacheData */
+
+/**
+ * @template T
+ * @typedef {import("../declarations/LoaderContext").LoaderContext<T>} LoaderContext
+ */
+
+/**
+ * @template T
+ * @typedef {import("../declarations/LoaderContext").NormalModuleLoaderContext<T>} NormalModuleLoaderContext
+ */
 
 /**
  * @typedef {object} SourceMap
@@ -97,6 +113,7 @@ const memoize = require("./util/memoize");
  * @property {string=} sourceRoot
  * @property {string[]=} sourcesContent
  * @property {string[]=} names
+ * @property {string=} debugId
  */
 
 const getInvalidDependenciesModuleWarning = memoize(() =>
@@ -184,11 +201,14 @@ const asBuffer = input => {
 };
 
 class NonErrorEmittedError extends WebpackError {
+	/**
+	 * @param {any} error value which is not an instance of Error
+	 */
 	constructor(error) {
 		super();
 
 		this.name = "NonErrorEmittedError";
-		this.message = "(Emitted value instead of an instance of Error) " + error;
+		this.message = `(Emitted value instead of an instance of Error) ${error}`;
 	}
 }
 
@@ -200,12 +220,12 @@ makeSerializable(
 
 /**
  * @typedef {object} NormalModuleCompilationHooks
- * @property {SyncHook<[object, NormalModule]>} loader
- * @property {SyncHook<[LoaderItem[], NormalModule, object]>} beforeLoaders
+ * @property {SyncHook<[LoaderContext<any>, NormalModule]>} loader
+ * @property {SyncHook<[LoaderItem[], NormalModule, LoaderContext<any>]>} beforeLoaders
  * @property {SyncHook<[NormalModule]>} beforeParse
  * @property {SyncHook<[NormalModule]>} beforeSnapshot
- * @property {HookMap<AsyncSeriesBailHook<[string, NormalModule], string | Buffer>>} readResourceForScheme
- * @property {HookMap<AsyncSeriesBailHook<[object], string | Buffer>>} readResource
+ * @property {HookMap<FakeHook<AsyncSeriesBailHook<[string, NormalModule], string | Buffer | null>>>} readResourceForScheme
+ * @property {HookMap<AsyncSeriesBailHook<[LoaderContext<any>], string | Buffer | null>>} readResource
  * @property {AsyncSeriesBailHook<[NormalModule, NeedBuildContext], boolean>} needBuild
  */
 
@@ -251,20 +271,32 @@ class NormalModule extends Module {
 				beforeSnapshot: new SyncHook(["module"]),
 				// TODO webpack 6 deprecate
 				readResourceForScheme: new HookMap(scheme => {
-					const hook = hooks.readResource.for(scheme);
+					const hook =
+						/** @type {NormalModuleCompilationHooks} */
+						(hooks).readResource.for(scheme);
 					return createFakeHook(
-						/** @type {AsyncSeriesBailHook<[string, NormalModule], string | Buffer>} */ ({
+						/** @type {AsyncSeriesBailHook<[string, NormalModule], string | Buffer | null>} */ ({
 							tap: (options, fn) =>
 								hook.tap(options, loaderContext =>
-									fn(loaderContext.resource, loaderContext._module)
+									fn(
+										loaderContext.resource,
+										/** @type {NormalModule} */ (loaderContext._module)
+									)
 								),
 							tapAsync: (options, fn) =>
 								hook.tapAsync(options, (loaderContext, callback) =>
-									fn(loaderContext.resource, loaderContext._module, callback)
+									fn(
+										loaderContext.resource,
+										/** @type {NormalModule} */ (loaderContext._module),
+										callback
+									)
 								),
 							tapPromise: (options, fn) =>
 								hook.tapPromise(options, loaderContext =>
-									fn(loaderContext.resource, loaderContext._module)
+									fn(
+										loaderContext.resource,
+										/** @type {NormalModule} */ (loaderContext._module)
+									)
 								)
 						})
 					);
@@ -343,7 +375,7 @@ class NormalModule extends Module {
 		this._source = null;
 		/**
 		 * @private
-		 * @type {Map<string, number> | undefined}
+		 * @type {Map<string | undefined, number> | undefined}
 		 */
 		this._sourceSizes = undefined;
 		/**
@@ -369,12 +401,10 @@ class NormalModule extends Module {
 		if (this.layer === null) {
 			if (this.type === JAVASCRIPT_MODULE_TYPE_AUTO) {
 				return this.request;
-			} else {
-				return `${this.type}|${this.request}`;
 			}
-		} else {
-			return `${this.type}|${this.request}|${this.layer}`;
+			return `${this.type}|${this.request}`;
 		}
+		return `${this.type}|${this.request}|${this.layer}`;
 	}
 
 	/**
@@ -382,7 +412,7 @@ class NormalModule extends Module {
 	 * @returns {string} a user readable identifier of the module
 	 */
 	readableIdentifier(requestShortener) {
-		return requestShortener.shorten(this.userRequest);
+		return /** @type {string} */ (requestShortener.shorten(this.userRequest));
 	}
 
 	/**
@@ -556,30 +586,36 @@ class NormalModule extends Module {
 		/**
 		 * @returns {ResolveContext} resolve context
 		 */
-		const getResolveContext = () => {
-			return {
-				fileDependencies: {
-					add: d => /** @type {TODO} */ (loaderContext).addDependency(d)
-				},
-				contextDependencies: {
-					add: d => /** @type {TODO} */ (loaderContext).addContextDependency(d)
-				},
-				missingDependencies: {
-					add: d => /** @type {TODO} */ (loaderContext).addMissingDependency(d)
-				}
-			};
-		};
+		const getResolveContext = () => ({
+			fileDependencies: {
+				add: d => /** @type {TODO} */ (loaderContext).addDependency(d)
+			},
+			contextDependencies: {
+				add: d => /** @type {TODO} */ (loaderContext).addContextDependency(d)
+			},
+			missingDependencies: {
+				add: d => /** @type {TODO} */ (loaderContext).addMissingDependency(d)
+			}
+		});
 		const getAbsolutify = memoize(() =>
 			absolutify.bindCache(compilation.compiler.root)
 		);
 		const getAbsolutifyInContext = memoize(() =>
-			absolutify.bindContextCache(this.context, compilation.compiler.root)
+			absolutify.bindContextCache(
+				/** @type {string} */
+				(this.context),
+				compilation.compiler.root
+			)
 		);
 		const getContextify = memoize(() =>
 			contextify.bindCache(compilation.compiler.root)
 		);
 		const getContextifyInContext = memoize(() =>
-			contextify.bindContextCache(this.context, compilation.compiler.root)
+			contextify.bindContextCache(
+				/** @type {string} */
+				(this.context),
+				compilation.compiler.root
+			)
 		);
 		const utils = {
 			/**
@@ -587,28 +623,29 @@ class NormalModule extends Module {
 			 * @param {string} request request
 			 * @returns {string} result
 			 */
-			absolutify: (context, request) => {
-				return context === this.context
+			absolutify: (context, request) =>
+				context === this.context
 					? getAbsolutifyInContext()(request)
-					: getAbsolutify()(context, request);
-			},
+					: getAbsolutify()(context, request),
 			/**
 			 * @param {string} context context
 			 * @param {string} request request
 			 * @returns {string} result
 			 */
-			contextify: (context, request) => {
-				return context === this.context
+			contextify: (context, request) =>
+				context === this.context
 					? getContextifyInContext()(request)
-					: getContextify()(context, request);
-			},
+					: getContextify()(context, request),
 			/**
 			 * @param {(string | typeof import("./util/Hash"))=} type type
 			 * @returns {Hash} hash
 			 */
-			createHash: type => {
-				return createHash(type || compilation.outputOptions.hashFunction);
-			}
+			createHash: type =>
+				createHash(
+					type ||
+						/** @type {Algorithm} */
+						(compilation.outputOptions.hashFunction)
+				)
 		};
 		/** @type {import("../declarations/LoaderContext").NormalModuleLoaderContext<T>} */
 		const loaderContext = {
@@ -622,8 +659,10 @@ class NormalModule extends Module {
 					if (options.startsWith("{") && options.endsWith("}")) {
 						try {
 							options = parseJson(options);
-						} catch (e) {
-							throw new Error(`Cannot parse string options: ${e.message}`);
+						} catch (err) {
+							throw new Error(
+								`Cannot parse string options: ${/** @type {Error} */ (err).message}`
+							);
 						}
 					} else {
 						options = querystring.parse(options, "&", "=", {
@@ -738,17 +777,21 @@ class NormalModule extends Module {
 			utils,
 			rootContext: /** @type {string} */ (options.context),
 			webpack: true,
-			sourceMap: !!this.useSourceMap,
+			sourceMap: Boolean(this.useSourceMap),
 			mode: options.mode || "production",
+			hashFunction: /** @type {TODO} */ (options.output.hashFunction),
+			hashDigest: /** @type {string} */ (options.output.hashDigest),
+			hashDigestLength: /** @type {number} */ (options.output.hashDigestLength),
+			hashSalt: /** @type {string} */ (options.output.hashSalt),
 			_module: this,
 			_compilation: compilation,
 			_compiler: compilation.compiler,
-			fs: fs
+			fs
 		};
 
 		Object.assign(loaderContext, options.loader);
 
-		hooks.loader.call(loaderContext, this);
+		hooks.loader.call(/** @type {LoaderContext<any>} */ (loaderContext), this);
 
 		return loaderContext;
 	}
@@ -775,7 +818,7 @@ class NormalModule extends Module {
 	/**
 	 * @param {string} context the compilation context
 	 * @param {string | Buffer} content the content
-	 * @param {(string | SourceMapSource)=} sourceMap an optional source map
+	 * @param {(string | SourceMapSource | null)=} sourceMap an optional source map
 	 * @param {object=} associatedObjectForCache object for caching
 	 * @returns {Source} the created source
 	 */
@@ -832,7 +875,14 @@ class NormalModule extends Module {
 			hooks
 		);
 
-		const processResult = (err, result) => {
+		/** @typedef {[string | Buffer, string | SourceMapSource, Record<string, any>]}  Result */
+
+		/**
+		 * @param {Error | null} err err
+		 * @param {(Result | null)=} _result result
+		 * @returns {void}
+		 */
+		const processResult = (err, _result) => {
 			if (err) {
 				if (!(err instanceof Error)) {
 					err = new NonErrorEmittedError(err);
@@ -848,6 +898,7 @@ class NormalModule extends Module {
 				return callback(error);
 			}
 
+			const result = /** @type {Result} */ (_result);
 			const source = result[0];
 			const sourceMap = result.length >= 1 ? result[1] : null;
 			const extraInfo = result.length >= 2 ? result[2] : null;
@@ -896,9 +947,13 @@ class NormalModule extends Module {
 		buildInfo.cacheable = true;
 
 		try {
-			hooks.beforeLoaders.call(this.loaders, this, loaderContext);
+			hooks.beforeLoaders.call(
+				this.loaders,
+				this,
+				/** @type {LoaderContext<any>} */ (loaderContext)
+			);
 		} catch (err) {
-			processResult(err);
+			processResult(/** @type {Error} */ (err));
 			return;
 		}
 
@@ -912,6 +967,11 @@ class NormalModule extends Module {
 				resource: this.resource,
 				loaders: this.loaders,
 				context: loaderContext,
+				/**
+				 * @param {LoaderContext<TODO>} loaderContext the loader context
+				 * @param {string} resourcePath the resource Path
+				 * @param {(err: Error | null, result?: string | Buffer) => void} callback callback
+				 */
 				processResource: (loaderContext, resourcePath, callback) => {
 					const resource = loaderContext.resource;
 					const scheme = getScheme(resource);
@@ -920,7 +980,13 @@ class NormalModule extends Module {
 						.callAsync(loaderContext, (err, result) => {
 							if (err) return callback(err);
 							if (typeof result !== "string" && !result) {
-								return callback(new UnhandledSchemeError(scheme, resource));
+								return callback(
+									new UnhandledSchemeError(
+										/** @type {string} */
+										(scheme),
+										resource
+									)
+								);
 							}
 							return callback(null, result);
 						});
@@ -1037,7 +1103,10 @@ class NormalModule extends Module {
 	 * @private
 	 */
 	_initBuildHash(compilation) {
-		const hash = createHash(compilation.outputOptions.hashFunction);
+		const hash = createHash(
+			/** @type {Algorithm} */
+			(compilation.outputOptions.hashFunction)
+		);
 		if (this._source) {
 			hash.update("source");
 			this._source.updateHash(hash);
@@ -1128,7 +1197,7 @@ class NormalModule extends Module {
 				try {
 					hooks.beforeSnapshot.call(this);
 				} catch (err) {
-					this.markModuleAsErrored(err);
+					this.markModuleAsErrored(/** @type {WebpackError} */ (err));
 					return callback();
 				}
 
@@ -1140,7 +1209,7 @@ class NormalModule extends Module {
 				// add warning for all non-absolute paths in fileDependencies, etc
 				// This makes it easier to find problems with watching and/or caching
 				/** @type {undefined | Set<string>} */
-				let nonAbsoluteDependencies = undefined;
+				let nonAbsoluteDependencies;
 				/**
 				 * @param {LazySet<string>} deps deps
 				 */
@@ -1155,7 +1224,8 @@ class NormalModule extends Module {
 								const depWithoutGlob = dep.replace(/[\\/]?\*.*$/, "");
 								const absolute = join(
 									compilation.fileSystemInfo.fs,
-									this.context,
+									/** @type {string} */
+									(this.context),
 									depWithoutGlob
 								);
 								if (absolute !== dep && ABSOLUTE_PATH_REGEX.test(absolute)) {
@@ -1168,7 +1238,7 @@ class NormalModule extends Module {
 										: deps
 									).add(absolute);
 								}
-							} catch (e) {
+							} catch (_err) {
 								// ignore
 							}
 						}
@@ -1218,7 +1288,7 @@ class NormalModule extends Module {
 			try {
 				hooks.beforeParse.call(this);
 			} catch (err) {
-				this.markModuleAsErrored(err);
+				this.markModuleAsErrored(/** @type {WebpackError} */ (err));
 				this._initBuildHash(compilation);
 				return callback();
 			}
@@ -1241,11 +1311,11 @@ class NormalModule extends Module {
 					source,
 					current: this,
 					module: this,
-					compilation: compilation,
-					options: options
+					compilation,
+					options
 				});
-			} catch (e) {
-				handleParseError(/** @type {Error} */ (e));
+			} catch (parseErr) {
+				handleParseError(/** @type {Error} */ (parseErr));
 				return;
 			}
 			handleParseResult();
@@ -1305,9 +1375,8 @@ class NormalModule extends Module {
 			// When caching is implemented here, make sure to not cache when
 			// at least one circular connection was in the loop above
 			return current;
-		} else {
-			return true;
 		}
+		return true;
 	}
 
 	/**
@@ -1348,15 +1417,13 @@ class NormalModule extends Module {
 		}
 
 		/** @type {function(): Map<string, any>} */
-		const getData = () => {
-			return this._codeGeneratorData;
-		};
+		const getData = () => this._codeGeneratorData;
 
 		const sources = new Map();
 		for (const type of sourceTypes || chunkGraph.getModuleSourceTypes(this)) {
 			const source = this.error
 				? new RawSource(
-						"throw new Error(" + JSON.stringify(this.error.message) + ");"
+						`throw new Error(${JSON.stringify(this.error.message)});`
 					)
 				: /** @type {Generator} */ (this.generator).generate(this, {
 						dependencyTemplates,
@@ -1453,7 +1520,7 @@ class NormalModule extends Module {
 						)
 					);
 				}
-				callback(null, !!needBuild);
+				callback(null, Boolean(needBuild));
 			});
 		});
 	}
@@ -1519,7 +1586,8 @@ class NormalModule extends Module {
 	 */
 	updateHash(hash, context) {
 		hash.update(/** @type {BuildInfo} */ (this.buildInfo).hash);
-		this.generator.updateHash(hash, {
+		/** @type {Generator} */
+		(this.generator).updateHash(hash, {
 			module: this,
 			...context
 		});
@@ -1540,24 +1608,28 @@ class NormalModule extends Module {
 		super.serialize(context);
 	}
 
+	/**
+	 * @param {ObjectDeserializerContext} context context
+	 * @returns {TODO} Module
+	 */
 	static deserialize(context) {
 		const obj = new NormalModule({
 			// will be deserialized by Module
-			layer: null,
+			layer: /** @type {EXPECTED_ANY} */ (null),
 			type: "",
 			// will be filled by updateCacheModule
 			resource: "",
 			context: "",
-			request: null,
-			userRequest: null,
-			rawRequest: null,
-			loaders: null,
-			matchResource: null,
-			parser: null,
-			parserOptions: null,
-			generator: null,
-			generatorOptions: null,
-			resolveOptions: null
+			request: /** @type {EXPECTED_ANY} */ (null),
+			userRequest: /** @type {EXPECTED_ANY} */ (null),
+			rawRequest: /** @type {EXPECTED_ANY} */ (null),
+			loaders: /** @type {EXPECTED_ANY} */ (null),
+			matchResource: /** @type {EXPECTED_ANY} */ (null),
+			parser: /** @type {EXPECTED_ANY} */ (null),
+			parserOptions: /** @type {EXPECTED_ANY} */ (null),
+			generator: /** @type {EXPECTED_ANY} */ (null),
+			generatorOptions: /** @type {EXPECTED_ANY} */ (null),
+			resolveOptions: /** @type {EXPECTED_ANY} */ (null)
 		});
 		obj.deserialize(context);
 		return obj;

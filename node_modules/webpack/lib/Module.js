@@ -9,6 +9,7 @@ const util = require("util");
 const ChunkGraph = require("./ChunkGraph");
 const DependenciesBlock = require("./DependenciesBlock");
 const ModuleGraph = require("./ModuleGraph");
+const { JS_TYPES } = require("./ModuleSourceTypesConstants");
 const RuntimeGlobals = require("./RuntimeGlobals");
 const { first } = require("./util/SetHelpers");
 const { compareChunksById } = require("./util/comparators");
@@ -18,6 +19,7 @@ const makeSerializable = require("./util/makeSerializable");
 /** @typedef {import("../declarations/WebpackOptions").ResolveOptions} ResolveOptions */
 /** @typedef {import("../declarations/WebpackOptions").WebpackOptionsNormalized} WebpackOptions */
 /** @typedef {import("./Chunk")} Chunk */
+/** @typedef {import("./ChunkGraph").ModuleId} ModuleId */
 /** @typedef {import("./ChunkGroup")} ChunkGroup */
 /** @typedef {import("./CodeGenerationResults")} CodeGenerationResults */
 /** @typedef {import("./Compilation")} Compilation */
@@ -54,6 +56,8 @@ const makeSerializable = require("./util/makeSerializable");
  * @property {string=} type the type of source that should be generated
  */
 
+/** @typedef {ReadonlySet<string>} SourceTypes */
+
 // TODO webpack 6: compilation will be required in CodeGenerationContext
 /**
  * @typedef {object} CodeGenerationContext
@@ -65,7 +69,7 @@ const makeSerializable = require("./util/makeSerializable");
  * @property {ConcatenationScope=} concatenationScope when in concatenated module, information about other concatenated modules
  * @property {CodeGenerationResults | undefined} codeGenerationResults code generation results of other modules (need to have a codeGenerationDependency to use that)
  * @property {Compilation=} compilation the compilation
- * @property {ReadonlySet<string>=} sourceTypes source types
+ * @property {SourceTypes=} sourceTypes source types
  */
 
 /**
@@ -81,7 +85,7 @@ const makeSerializable = require("./util/makeSerializable");
  * @typedef {object} CodeGenerationResult
  * @property {Map<string, Source>} sources the resulting sources for all source types
  * @property {Map<string, any>=} data the resulting data for all source types
- * @property {ReadOnlyRuntimeRequirements} runtimeRequirements the runtime requirements
+ * @property {ReadOnlyRuntimeRequirements | null} runtimeRequirements the runtime requirements
  * @property {string=} hash a hash of the code generation result (will be automatically calculated from sources and runtimeRequirements if not provided)
  */
 
@@ -102,6 +106,7 @@ const makeSerializable = require("./util/makeSerializable");
  * @property {boolean=} strictHarmonyModule
  * @property {boolean=} async
  * @property {boolean=} sideEffectFree
+ * @property {Record<string, string>=} exportsFinalName
  */
 
 /**
@@ -112,18 +117,20 @@ const makeSerializable = require("./util/makeSerializable");
  * @property {LazySet<string>=} contextDependencies
  * @property {LazySet<string>=} missingDependencies
  * @property {LazySet<string>=} buildDependencies
- * @property {(Map<string, string | Set<string>>)=} valueDependencies
+ * @property {ValueCacheVersions=} valueDependencies
  * @property {TODO=} hash
  * @property {Record<string, Source>=} assets
  * @property {Map<string, AssetInfo | undefined>=} assetsInfo
  * @property {(Snapshot | null)=} snapshot
  */
 
+/** @typedef {Map<string, string | Set<string>>} ValueCacheVersions */
+
 /**
  * @typedef {object} NeedBuildContext
  * @property {Compilation} compilation
  * @property {FileSystemInfo} fileSystemInfo
- * @property {Map<string, string | Set<string>>} valueCacheVersions
+ * @property {ValueCacheVersions} valueCacheVersions
  */
 
 /** @typedef {KnownBuildMeta & Record<string, any>} BuildMeta */
@@ -134,8 +141,6 @@ const makeSerializable = require("./util/makeSerializable");
  * @property {boolean=} sideEffectFree
  */
 
-/** @typedef {Set<string>} SourceTypes */
-
 /** @typedef {{ factoryMeta: FactoryMeta | undefined, resolveOptions: ResolveOptions | undefined }} UnsafeCacheData */
 
 const EMPTY_RESOLVE_OPTIONS = {};
@@ -143,7 +148,6 @@ const EMPTY_RESOLVE_OPTIONS = {};
 let debugId = 1000;
 
 const DEFAULT_TYPES_UNKNOWN = new Set(["unknown"]);
-const DEFAULT_TYPES_JS = new Set(["javascript"]);
 
 const deprecatedNeedRebuild = util.deprecate(
 	/**
@@ -151,12 +155,11 @@ const deprecatedNeedRebuild = util.deprecate(
 	 * @param {NeedBuildContext} context context info
 	 * @returns {boolean} true, when rebuild is needed
 	 */
-	(module, context) => {
-		return module.needRebuild(
+	(module, context) =>
+		module.needRebuild(
 			context.fileSystemInfo.getDeprecatedFileTimestamps(),
 			context.fileSystemInfo.getDeprecatedContextTimestamps()
-		);
-	},
+		),
 	"Module.needRebuild is deprecated in favor of Module.needBuild",
 	"DEP_WEBPACK_MODULE_NEED_REBUILD"
 );
@@ -197,6 +200,9 @@ class Module extends DependenciesBlock {
 		/** @type {boolean} */
 		this.useSimpleSourceMap = false;
 
+		// Is in hot context, i.e. HotModuleReplacementPlugin.js enabled
+		/** @type {boolean} */
+		this.hot = false;
 		// Info from Build
 		/** @type {WebpackError[] | undefined} */
 		this._warnings = undefined;
@@ -214,6 +220,9 @@ class Module extends DependenciesBlock {
 
 	// TODO remove in webpack 6
 	// BACKWARD-COMPAT START
+	/**
+	 * @returns {ModuleId | null} module id
+	 */
 	get id() {
 		return ChunkGraph.getChunkGraphForModule(
 			this,
@@ -222,6 +231,9 @@ class Module extends DependenciesBlock {
 		).getModuleId(this);
 	}
 
+	/**
+	 * @param {ModuleId} value value
+	 */
 	set id(value) {
 		if (value === "") {
 			this.needId = false;
@@ -865,9 +877,8 @@ class Module extends DependenciesBlock {
 		// Better override this method to return the correct types
 		if (this.source === Module.prototype.source) {
 			return DEFAULT_TYPES_UNKNOWN;
-		} else {
-			return DEFAULT_TYPES_JS;
 		}
+		return JS_TYPES;
 	}
 
 	/**
@@ -899,7 +910,11 @@ class Module extends DependenciesBlock {
 		};
 		const sources = this.codeGeneration(codeGenContext).sources;
 
-		return type ? sources.get(type) : sources.get(first(this.getSourceTypes()));
+		return /** @type {Source} */ (
+			type
+				? sources.get(type)
+				: sources.get(/** @type {string} */ (first(this.getSourceTypes())))
+		);
 	}
 
 	/* istanbul ignore next */
@@ -1063,6 +1078,7 @@ class Module extends DependenciesBlock {
 		write(this.factoryMeta);
 		write(this.useSourceMap);
 		write(this.useSimpleSourceMap);
+		write(this.hot);
 		write(
 			this._warnings !== undefined && this._warnings.length === 0
 				? undefined
@@ -1092,6 +1108,7 @@ class Module extends DependenciesBlock {
 		this.factoryMeta = read();
 		this.useSourceMap = read();
 		this.useSimpleSourceMap = read();
+		this.hot = read();
 		this._warnings = read();
 		this._errors = read();
 		this.buildMeta = read();
@@ -1105,6 +1122,8 @@ class Module extends DependenciesBlock {
 makeSerializable(Module, "webpack/lib/Module");
 
 // TODO remove in webpack 6
+// eslint-disable-next-line no-warning-comments
+// @ts-ignore https://github.com/microsoft/TypeScript/issues/42919
 Object.defineProperty(Module.prototype, "hasEqualsChunks", {
 	get() {
 		throw new Error(
@@ -1114,6 +1133,8 @@ Object.defineProperty(Module.prototype, "hasEqualsChunks", {
 });
 
 // TODO remove in webpack 6
+// eslint-disable-next-line no-warning-comments
+// @ts-ignore https://github.com/microsoft/TypeScript/issues/42919
 Object.defineProperty(Module.prototype, "isUsed", {
 	get() {
 		throw new Error(
@@ -1159,6 +1180,8 @@ Object.defineProperty(Module.prototype, "warnings", {
 });
 
 // TODO remove in webpack 6
+// eslint-disable-next-line no-warning-comments
+// @ts-ignore https://github.com/microsoft/TypeScript/issues/42919
 Object.defineProperty(Module.prototype, "used", {
 	get() {
 		throw new Error(

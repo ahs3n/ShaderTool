@@ -34,10 +34,19 @@ const RuntimeIdRuntimeModule = require("./runtime/RuntimeIdRuntimeModule");
 const SystemContextRuntimeModule = require("./runtime/SystemContextRuntimeModule");
 const ShareRuntimeModule = require("./sharing/ShareRuntimeModule");
 const StringXor = require("./util/StringXor");
+const memoize = require("./util/memoize");
 
+/** @typedef {import("../declarations/WebpackOptions").LibraryOptions} LibraryOptions */
+/** @typedef {import("../declarations/WebpackOptions").OutputNormalized} OutputNormalized */
 /** @typedef {import("./Chunk")} Chunk */
 /** @typedef {import("./Compiler")} Compiler */
 /** @typedef {import("./Module")} Module */
+/** @typedef {import("./TemplatedPathPlugin").TemplatePath} TemplatePath */
+
+const getJavascriptModulesPlugin = memoize(() =>
+	require("./javascript/JavascriptModulesPlugin")
+);
+const getCssModulesPlugin = memoize(() => require("./css/CssModulesPlugin"));
 
 const GLOBALS_ON_REQUIRE = [
 	RuntimeGlobals.chunkName,
@@ -241,13 +250,12 @@ class RuntimePlugin {
 			compilation.hooks.runtimeRequirementInTree
 				.for(RuntimeGlobals.systemContext)
 				.tap("RuntimePlugin", chunk => {
-					const { outputOptions } = compilation;
-					const { library: globalLibrary } = outputOptions;
 					const entryOptions = chunk.getEntryOptions();
 					const libraryType =
 						entryOptions && entryOptions.library !== undefined
 							? entryOptions.library.type
-							: globalLibrary.type;
+							: /** @type {LibraryOptions} */
+								(compilation.outputOptions.library).type;
 
 					if (libraryType === "system") {
 						compilation.addRuntimeModule(
@@ -259,7 +267,7 @@ class RuntimePlugin {
 				});
 			compilation.hooks.runtimeRequirementInTree
 				.for(RuntimeGlobals.getChunkScriptFilename)
-				.tap("RuntimePlugin", (chunk, set) => {
+				.tap("RuntimePlugin", (chunk, set, { chunkGraph }) => {
 					if (
 						typeof compilation.outputOptions.chunkFilename === "string" &&
 						/\[(full)?hash(:\d+)?\]/.test(
@@ -275,10 +283,13 @@ class RuntimePlugin {
 							"javascript",
 							RuntimeGlobals.getChunkScriptFilename,
 							chunk =>
-								chunk.filenameTemplate ||
-								(chunk.canBeInitial()
-									? compilation.outputOptions.filename
-									: compilation.outputOptions.chunkFilename),
+								getJavascriptModulesPlugin().chunkHasJs(chunk, chunkGraph) &&
+								/** @type {TemplatePath} */ (
+									chunk.filenameTemplate ||
+										(chunk.canBeInitial()
+											? compilation.outputOptions.filename
+											: compilation.outputOptions.chunkFilename)
+								),
 							false
 						)
 					);
@@ -286,7 +297,7 @@ class RuntimePlugin {
 				});
 			compilation.hooks.runtimeRequirementInTree
 				.for(RuntimeGlobals.getChunkCssFilename)
-				.tap("RuntimePlugin", (chunk, set) => {
+				.tap("RuntimePlugin", (chunk, set, { chunkGraph }) => {
 					if (
 						typeof compilation.outputOptions.cssChunkFilename === "string" &&
 						/\[(full)?hash(:\d+)?\]/.test(
@@ -302,6 +313,7 @@ class RuntimePlugin {
 							"css",
 							RuntimeGlobals.getChunkCssFilename,
 							chunk =>
+								getCssModulesPlugin().chunkHasCss(chunk, chunkGraph) &&
 								getChunkFilenameTemplate(chunk, compilation.outputOptions),
 							set.has(RuntimeGlobals.hmrDownloadUpdateHandlers)
 						)
@@ -313,7 +325,8 @@ class RuntimePlugin {
 				.tap("RuntimePlugin", (chunk, set) => {
 					if (
 						/\[(full)?hash(:\d+)?\]/.test(
-							compilation.outputOptions.hotUpdateChunkFilename
+							/** @type {NonNullable<OutputNormalized["hotUpdateChunkFilename"]>} */
+							(compilation.outputOptions.hotUpdateChunkFilename)
 						)
 					)
 						set.add(RuntimeGlobals.getFullHash);
@@ -323,7 +336,9 @@ class RuntimePlugin {
 							"javascript",
 							"javascript update",
 							RuntimeGlobals.getChunkUpdateScriptFilename,
-							c => compilation.outputOptions.hotUpdateChunkFilename,
+							c =>
+								/** @type {NonNullable<OutputNormalized["hotUpdateChunkFilename"]>} */
+								(compilation.outputOptions.hotUpdateChunkFilename),
 							true
 						)
 					);
@@ -334,7 +349,8 @@ class RuntimePlugin {
 				.tap("RuntimePlugin", (chunk, set) => {
 					if (
 						/\[(full)?hash(:\d+)?\]/.test(
-							compilation.outputOptions.hotUpdateMainFilename
+							/** @type {NonNullable<OutputNormalized["hotUpdateMainFilename"]>} */
+							(compilation.outputOptions.hotUpdateMainFilename)
 						)
 					) {
 						set.add(RuntimeGlobals.getFullHash);
@@ -344,7 +360,8 @@ class RuntimePlugin {
 						new GetMainFilenameRuntimeModule(
 							"update manifest",
 							RuntimeGlobals.getUpdateManifestFilename,
-							compilation.outputOptions.hotUpdateMainFilename
+							/** @type {NonNullable<OutputNormalized["hotUpdateMainFilename"]>} */
+							(compilation.outputOptions.hotUpdateMainFilename)
 						)
 					);
 					return true;
@@ -376,7 +393,9 @@ class RuntimePlugin {
 			compilation.hooks.runtimeRequirementInTree
 				.for(RuntimeGlobals.loadScript)
 				.tap("RuntimePlugin", (chunk, set) => {
-					const withCreateScriptUrl = !!compilation.outputOptions.trustedTypes;
+					const withCreateScriptUrl = Boolean(
+						compilation.outputOptions.trustedTypes
+					);
 					if (withCreateScriptUrl) {
 						set.add(RuntimeGlobals.createScriptUrl);
 					}

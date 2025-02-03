@@ -39,7 +39,7 @@ class EvalDevToolModulePlugin {
 	/**
 	 * @param {EvalDevToolModulePluginOptions=} options options
 	 */
-	constructor(options) {
+	constructor(options = {}) {
 		this.namespace = options.namespace || "";
 		this.sourceUrlComment = options.sourceUrlComment || "\n//# sourceURL=[url]";
 		this.moduleFilenameTemplate =
@@ -57,7 +57,7 @@ class EvalDevToolModulePlugin {
 			const hooks = JavascriptModulesPlugin.getCompilationHooks(compilation);
 			hooks.renderModuleContent.tap(
 				"EvalDevToolModulePlugin",
-				(source, module, { runtimeTemplate, chunkGraph }) => {
+				(source, module, { chunk, runtimeTemplate, chunkGraph }) => {
 					const cacheEntry = cache.get(source);
 					if (cacheEntry !== undefined) return cacheEntry;
 					if (module instanceof ExternalModule) {
@@ -65,11 +65,14 @@ class EvalDevToolModulePlugin {
 						return source;
 					}
 					const content = source.source();
+					const namespace = compilation.getPath(this.namespace, {
+						chunk
+					});
 					const str = ModuleFilenameHelpers.createFilename(
 						module,
 						{
 							moduleFilenameTemplate: this.moduleFilenameTemplate,
-							namespace: this.namespace
+							namespace
 						},
 						{
 							requestShortener: runtimeTemplate.requestShortener,
@@ -77,17 +80,15 @@ class EvalDevToolModulePlugin {
 							hashFunction: compilation.outputOptions.hashFunction
 						}
 					);
-					const footer =
-						"\n" +
-						this.sourceUrlComment.replace(
-							/\[url\]/g,
-							encodeURI(str)
-								.replace(/%2F/g, "/")
-								.replace(/%20/g, "_")
-								.replace(/%5E/g, "^")
-								.replace(/%5C/g, "\\")
-								.replace(/^\//, "")
-						);
+					const footer = `\n${this.sourceUrlComment.replace(
+						/\[url\]/g,
+						encodeURI(str)
+							.replace(/%2F/g, "/")
+							.replace(/%20/g, "_")
+							.replace(/%5E/g, "^")
+							.replace(/%5C/g, "\\")
+							.replace(/^\//, "")
+					)}`;
 					const result = new RawSource(
 						`eval(${
 							compilation.outputOptions.trustedTypes

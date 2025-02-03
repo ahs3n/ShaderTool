@@ -135,6 +135,8 @@ const identifyBigInt = n => {
 	return 2;
 };
 
+/** @typedef {TODO} Context */
+
 /**
  * @typedef {PrimitiveSerializableType[]} DeserializedType
  * @typedef {BufferSerializableType[]} SerializedType
@@ -150,6 +152,11 @@ class BinaryMiddleware extends SerializerMiddleware {
 		return this._serialize(data, context);
 	}
 
+	/**
+	 * @param {function(): Promise<any> | any} fn lazy function
+	 * @param {TODO} context serialize function
+	 * @returns {function(): Promise<any> | any} new lazy
+	 */
 	_serializeLazy(fn, context) {
 		return SerializerMiddleware.serializeLazy(fn, data =>
 			this._serialize(data, context)
@@ -158,7 +165,7 @@ class BinaryMiddleware extends SerializerMiddleware {
 
 	/**
 	 * @param {DeserializedType} data data
-	 * @param {object} context context object
+	 * @param {TODO} context context object
 	 * @param {{ leftOverBuffer: Buffer | null, allocationSize: number, increaseCounter: number }} allocationScope allocation scope
 	 * @returns {SerializedType} serialized data
 	 */
@@ -171,17 +178,20 @@ class BinaryMiddleware extends SerializerMiddleware {
 			leftOverBuffer: null
 		}
 	) {
-		/** @type {Buffer} */
+		/** @type {Buffer | null} */
 		let leftOverBuffer = null;
 		/** @type {BufferSerializableType[]} */
 		let buffers = [];
-		/** @type {Buffer} */
+		/** @type {Buffer | null} */
 		let currentBuffer = allocationScope ? allocationScope.leftOverBuffer : null;
 		allocationScope.leftOverBuffer = null;
 		let currentPosition = 0;
 		if (currentBuffer === null) {
 			currentBuffer = Buffer.allocUnsafe(allocationScope.allocationSize);
 		}
+		/**
+		 * @param {number} bytesNeeded bytes needed
+		 */
 		const allocate = bytesNeeded => {
 			if (currentBuffer !== null) {
 				if (currentBuffer.length - currentPosition >= bytesNeeded) return;
@@ -233,13 +243,15 @@ class BinaryMiddleware extends SerializerMiddleware {
 		 * @param {number} byte byte
 		 */
 		const writeU8 = byte => {
-			currentBuffer.writeUInt8(byte, currentPosition++);
+			/** @type {Buffer} */
+			(currentBuffer).writeUInt8(byte, currentPosition++);
 		};
 		/**
 		 * @param {number} ui32 ui32
 		 */
 		const writeU32 = ui32 => {
-			currentBuffer.writeUInt32LE(ui32, currentPosition);
+			/** @type {Buffer} */
+			(currentBuffer).writeUInt32LE(ui32, currentPosition);
 			currentPosition += 4;
 		};
 		/** @type {number[]} */
@@ -251,8 +263,8 @@ class BinaryMiddleware extends SerializerMiddleware {
 		 * @returns {number} size
 		 */
 		const measureEnd = () => {
-			const oldPos = measureStack.pop();
-			const buffersIndex = measureStack.pop();
+			const oldPos = /** @type {number} */ (measureStack.pop());
+			const buffersIndex = /** @type {number} */ (measureStack.pop());
 			let size = currentPosition - oldPos;
 			for (let i = buffersIndex; i < buffers.length; i++) {
 				size += buffers[i].length;
@@ -264,7 +276,7 @@ class BinaryMiddleware extends SerializerMiddleware {
 			switch (typeof thing) {
 				case "function": {
 					if (!SerializerMiddleware.isLazy(thing))
-						throw new Error("Unexpected function " + thing);
+						throw new Error(`Unexpected function ${thing}`);
 					/** @type {SerializedType | (() => SerializedType)} */
 					let serializedData =
 						SerializerMiddleware.getLazySerializedValue(thing);
@@ -287,12 +299,10 @@ class BinaryMiddleware extends SerializerMiddleware {
 							buffers.push(serializedData);
 							break;
 						}
-					} else {
-						if (typeof serializedData === "function") {
-							flush();
-							buffers.push(serializedData);
-							break;
-						}
+					} else if (typeof serializedData === "function") {
+						flush();
+						buffers.push(serializedData);
+						break;
 					}
 					/** @type {number[]} */
 					const lengths = [];
@@ -612,6 +622,11 @@ class BinaryMiddleware extends SerializerMiddleware {
 					}
 					break;
 				}
+				default: {
+					throw new Error(
+						`Unknown typeof "${typeof thing}" in binary middleware`
+					);
+				}
 			}
 		}
 		flush();
@@ -621,9 +636,9 @@ class BinaryMiddleware extends SerializerMiddleware {
 		// avoid leaking memory
 		currentBuffer = null;
 		leftOverBuffer = null;
-		allocationScope = undefined;
+		allocationScope = /** @type {EXPECTED_ANY} */ (undefined);
 		const _buffers = buffers;
-		buffers = undefined;
+		buffers = /** @type {EXPECTED_ANY} */ (undefined);
 		return _buffers;
 	}
 
@@ -653,19 +668,21 @@ class BinaryMiddleware extends SerializerMiddleware {
 
 	/**
 	 * @param {SerializedType} data data
-	 * @param {object} context context object
+	 * @param {TODO} context context object
 	 * @returns {DeserializedType} deserialized data
 	 */
 	_deserialize(data, context) {
 		let currentDataItem = 0;
+		/** @type {BufferSerializableType | null} */
 		let currentBuffer = data[0];
 		let currentIsBuffer = Buffer.isBuffer(currentBuffer);
 		let currentPosition = 0;
 
+		/** @type {(x: Buffer) => Buffer} */
 		const retainedBuffer = context.retainedBuffer || (x => x);
 
 		const checkOverflow = () => {
-			if (currentPosition >= currentBuffer.length) {
+			if (currentPosition >= /** @type {Buffer} */ (currentBuffer).length) {
 				currentPosition = 0;
 				currentDataItem++;
 				currentBuffer =
@@ -673,9 +690,13 @@ class BinaryMiddleware extends SerializerMiddleware {
 				currentIsBuffer = Buffer.isBuffer(currentBuffer);
 			}
 		};
-		const isInCurrentBuffer = n => {
-			return currentIsBuffer && n + currentPosition <= currentBuffer.length;
-		};
+		/**
+		 * @param {number} n n
+		 * @returns {boolean} true when in current buffer, otherwise false
+		 */
+		const isInCurrentBuffer = n =>
+			currentIsBuffer &&
+			n + currentPosition <= /** @type {Buffer} */ (currentBuffer).length;
 		const ensureBuffer = () => {
 			if (!currentIsBuffer) {
 				throw new Error(
@@ -692,12 +713,13 @@ class BinaryMiddleware extends SerializerMiddleware {
 		 */
 		const read = n => {
 			ensureBuffer();
-			const rem = currentBuffer.length - currentPosition;
+			const rem =
+				/** @type {Buffer} */ (currentBuffer).length - currentPosition;
 			if (rem < n) {
 				const buffers = [read(rem)];
 				n -= rem;
 				ensureBuffer();
-				while (currentBuffer.length < n) {
+				while (/** @type {Buffer} */ (currentBuffer).length < n) {
 					const b = /** @type {Buffer} */ (currentBuffer);
 					buffers.push(b);
 					n -= b.length;
@@ -723,7 +745,9 @@ class BinaryMiddleware extends SerializerMiddleware {
 		 */
 		const readUpTo = n => {
 			ensureBuffer();
-			const rem = currentBuffer.length - currentPosition;
+			const rem =
+				/** @type {Buffer} */
+				(currentBuffer).length - currentPosition;
 			if (rem < n) {
 				n = rem;
 			}
@@ -742,9 +766,9 @@ class BinaryMiddleware extends SerializerMiddleware {
 			 * There is no need to check remaining buffer size here
 			 * since {@link checkOverflow} guarantees at least one byte remaining
 			 */
-			const byte = /** @type {Buffer} */ (currentBuffer).readUInt8(
-				currentPosition
-			);
+			const byte =
+				/** @type {Buffer} */
+				(currentBuffer).readUInt8(currentPosition);
 			currentPosition += I8_SIZE;
 			checkOverflow();
 			return byte;
@@ -752,9 +776,11 @@ class BinaryMiddleware extends SerializerMiddleware {
 		/**
 		 * @returns {number} U32
 		 */
-		const readU32 = () => {
-			return read(I32_SIZE).readUInt32LE(0);
-		};
+		const readU32 = () => read(I32_SIZE).readUInt32LE(0);
+		/**
+		 * @param {number} data data
+		 * @param {number} n n
+		 */
 		const readBits = (data, n) => {
 			let mask = 1;
 			while (n !== 0) {
@@ -883,7 +909,8 @@ class BinaryMiddleware extends SerializerMiddleware {
 						const len = readU32();
 						if (isInCurrentBuffer(len) && currentPosition + len < 0x7fffffff) {
 							result.push(
-								currentBuffer.toString(
+								/** @type {Buffer} */
+								(currentBuffer).toString(
 									undefined,
 									currentPosition,
 									currentPosition + len
@@ -901,7 +928,8 @@ class BinaryMiddleware extends SerializerMiddleware {
 					return () => {
 						if (currentIsBuffer && currentPosition < 0x7ffffffe) {
 							result.push(
-								currentBuffer.toString(
+								/** @type {Buffer} */
+								(currentBuffer).toString(
 									"latin1",
 									currentPosition,
 									currentPosition + 1
@@ -974,11 +1002,13 @@ class BinaryMiddleware extends SerializerMiddleware {
 					return () => {
 						const len = readU32();
 						if (isInCurrentBuffer(len) && currentPosition + len < 0x7fffffff) {
-							const value = currentBuffer.toString(
-								undefined,
-								currentPosition,
-								currentPosition + len
-							);
+							const value =
+								/** @type {Buffer} */
+								(currentBuffer).toString(
+									undefined,
+									currentPosition,
+									currentPosition + len
+								);
 
 							result.push(BigInt(value));
 							currentPosition += len;
@@ -1000,7 +1030,8 @@ class BinaryMiddleware extends SerializerMiddleware {
 								currentPosition + len < 0x7fffffff
 							) {
 								result.push(
-									currentBuffer.toString(
+									/** @type {Buffer} */
+									(currentBuffer).toString(
 										"latin1",
 										currentPosition,
 										currentPosition + len
@@ -1075,13 +1106,10 @@ class BinaryMiddleware extends SerializerMiddleware {
 								}
 							}
 						};
-					} else {
-						return () => {
-							throw new Error(
-								`Unexpected header byte 0x${header.toString(16)}`
-							);
-						};
 					}
+					return () => {
+						throw new Error(`Unexpected header byte 0x${header.toString(16)}`);
+					};
 			}
 		});
 
@@ -1101,8 +1129,9 @@ class BinaryMiddleware extends SerializerMiddleware {
 		}
 
 		// avoid leaking memory in context
+		// eslint-disable-next-line prefer-const
 		let _result = result;
-		result = undefined;
+		result = /** @type {EXPECTED_ANY} */ (undefined);
 		return _result;
 	}
 }

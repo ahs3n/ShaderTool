@@ -12,8 +12,9 @@ const {
 const PureExpressionDependency = require("../dependencies/PureExpressionDependency");
 const InnerGraph = require("./InnerGraph");
 
-/** @typedef {import("estree").ClassDeclaration} ClassDeclarationNode */
-/** @typedef {import("estree").ClassExpression} ClassExpressionNode */
+/** @typedef {import("estree").ClassDeclaration} ClassDeclaration */
+/** @typedef {import("estree").ClassExpression} ClassExpression */
+/** @typedef {import("estree").Expression} Expression */
 /** @typedef {import("estree").Node} Node */
 /** @typedef {import("estree").VariableDeclarator} VariableDeclaratorNode */
 /** @typedef {import("../../declarations/WebpackOptions").JavascriptParserOptions} JavascriptParserOptions */
@@ -53,6 +54,9 @@ class InnerGraphPlugin {
 				 * @returns {void}
 				 */
 				const handler = (parser, parserOptions) => {
+					/**
+					 * @param {Expression} sup sup
+					 */
 					const onUsageSuper = sup => {
 						InnerGraph.onUsage(parser.state, usedByExports => {
 							switch (usedByExports) {
@@ -60,8 +64,11 @@ class InnerGraphPlugin {
 								case true:
 									return;
 								default: {
-									const dep = new PureExpressionDependency(sup.range);
-									dep.loc = sup.loc;
+									const dep = new PureExpressionDependency(
+										/** @type {Range} */
+										(sup.range)
+									);
+									dep.loc = /** @type {DependencyLocation} */ (sup.loc);
 									dep.usedByExports = usedByExports;
 									parser.state.module.addDependency(dep);
 									break;
@@ -96,7 +103,7 @@ class InnerGraphPlugin {
 					/** @type {WeakMap<Node, Node>} */
 					const statementPurePart = new WeakMap();
 
-					/** @type {WeakMap<ClassExpressionNode | ClassDeclarationNode, TopLevelSymbol>} */
+					/** @type {WeakMap<ClassExpression | ClassDeclaration, TopLevelSymbol>} */
 					const classWithTopLevelSymbol = new WeakMap();
 
 					/** @type {WeakMap<VariableDeclaratorNode, TopLevelSymbol>} */
@@ -109,13 +116,16 @@ class InnerGraphPlugin {
 					parser.hooks.preStatement.tap(PLUGIN_NAME, statement => {
 						if (!InnerGraph.isEnabled(parser.state)) return;
 
-						if (parser.scope.topLevelScope === true) {
-							if (statement.type === "FunctionDeclaration") {
-								const name = statement.id ? statement.id.name : "*default*";
-								const fn = InnerGraph.tagTopLevelSymbol(parser, name);
-								statementWithTopLevelSymbol.set(statement, fn);
-								return true;
-							}
+						if (
+							parser.scope.topLevelScope === true &&
+							statement.type === "FunctionDeclaration"
+						) {
+							const name = statement.id ? statement.id.name : "*default*";
+							const fn =
+								/** @type {TopLevelSymbol} */
+								(InnerGraph.tagTopLevelSymbol(parser, name));
+							statementWithTopLevelSymbol.set(statement, fn);
+							return true;
 						}
 					});
 
@@ -131,22 +141,40 @@ class InnerGraphPlugin {
 								)
 							) {
 								const name = statement.id ? statement.id.name : "*default*";
-								const fn = InnerGraph.tagTopLevelSymbol(parser, name);
+								const fn = /** @type {TopLevelSymbol} */ (
+									InnerGraph.tagTopLevelSymbol(parser, name)
+								);
 								classWithTopLevelSymbol.set(statement, fn);
 								return true;
 							}
 							if (statement.type === "ExportDefaultDeclaration") {
 								const name = "*default*";
-								const fn = InnerGraph.tagTopLevelSymbol(parser, name);
+								const fn =
+									/** @type {TopLevelSymbol} */
+									(InnerGraph.tagTopLevelSymbol(parser, name));
 								const decl = statement.declaration;
 								if (
 									(decl.type === "ClassExpression" ||
 										decl.type === "ClassDeclaration") &&
-									parser.isPure(decl, /** @type {Range} */ (decl.range)[0])
+									parser.isPure(
+										/** @type {ClassExpression | ClassDeclaration} */
+										(decl),
+										/** @type {Range} */
+										(decl.range)[0]
+									)
 								) {
-									classWithTopLevelSymbol.set(decl, fn);
+									classWithTopLevelSymbol.set(
+										/** @type {ClassExpression | ClassDeclaration} */
+										(decl),
+										fn
+									);
 								} else if (
-									parser.isPure(decl, /** @type {Range} */ (statement.range)[0])
+									parser.isPure(
+										/** @type {Expression} */
+										(decl),
+										/** @type {Range} */
+										(statement.range)[0]
+									)
 								) {
 									statementWithTopLevelSymbol.set(statement, fn);
 									if (
@@ -154,7 +182,11 @@ class InnerGraphPlugin {
 										!decl.type.endsWith("Declaration") &&
 										decl.type !== "Literal"
 									) {
-										statementPurePart.set(statement, decl);
+										statementPurePart.set(
+											statement,
+											/** @type {Expression} */
+											(decl)
+										);
 									}
 								}
 							}
@@ -176,7 +208,9 @@ class InnerGraphPlugin {
 									/** @type {Range} */ (decl.id.range)[1]
 								)
 							) {
-								const fn = InnerGraph.tagTopLevelSymbol(parser, name);
+								const fn =
+									/** @type {TopLevelSymbol} */
+									(InnerGraph.tagTopLevelSymbol(parser, name));
 								classWithTopLevelSymbol.set(decl.init, fn);
 							} else if (
 								parser.isPure(
@@ -184,7 +218,9 @@ class InnerGraphPlugin {
 									/** @type {Range} */ (decl.id.range)[1]
 								)
 							) {
-								const fn = InnerGraph.tagTopLevelSymbol(parser, name);
+								const fn =
+									/** @type {TopLevelSymbol} */
+									(InnerGraph.tagTopLevelSymbol(parser, name));
 								declWithTopLevelSymbol.set(decl, fn);
 								if (
 									!decl.init.type.endsWith("FunctionExpression") &&
@@ -332,7 +368,10 @@ class InnerGraphPlugin {
 						if (fn) {
 							InnerGraph.setTopLevelSymbol(parser.state, fn);
 							if (pureDeclarators.has(decl)) {
-								if (decl.init.type === "ClassExpression") {
+								if (
+									/** @type {ClassExpression} */
+									(decl.init).type === "ClassExpression"
+								) {
 									if (decl.init.superClass) {
 										onUsageSuper(decl.init.superClass);
 									}
@@ -344,7 +383,10 @@ class InnerGraphPlugin {
 												return;
 											default: {
 												const dep = new PureExpressionDependency(
-													/** @type {Range} */ (decl.init.range)
+													/** @type {Range} */ (
+														/** @type {ClassExpression} */
+														(decl.init).range
+													)
 												);
 												dep.loc = /** @type {DependencyLocation} */ (decl.loc);
 												dep.usedByExports = usedByExports;

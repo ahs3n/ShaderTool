@@ -11,6 +11,11 @@ const EnvironmentNotSupportAsyncWarning = require("./EnvironmentNotSupportAsyncW
 const { UsageState } = require("./ExportsInfo");
 const InitFragment = require("./InitFragment");
 const Module = require("./Module");
+const {
+	JS_TYPES,
+	CSS_URL_TYPES,
+	CSS_IMPORT_TYPES
+} = require("./ModuleSourceTypesConstants");
 const { JAVASCRIPT_MODULE_TYPE_DYNAMIC } = require("./ModuleTypeConstants");
 const RuntimeGlobals = require("./RuntimeGlobals");
 const Template = require("./Template");
@@ -30,6 +35,7 @@ const { register } = require("./util/serialization");
 /** @typedef {import("./DependencyTemplates")} DependencyTemplates */
 /** @typedef {import("./ExportsInfo")} ExportsInfo */
 /** @typedef {import("./Generator").GenerateContext} GenerateContext */
+/** @typedef {import("./Generator").SourceTypes} SourceTypes */
 /** @typedef {import("./Module").BuildInfo} BuildInfo */
 /** @typedef {import("./Module").CodeGenerationContext} CodeGenerationContext */
 /** @typedef {import("./Module").CodeGenerationResult} CodeGenerationResult */
@@ -37,7 +43,6 @@ const { register } = require("./util/serialization");
 /** @typedef {import("./Module").LibIdentOptions} LibIdentOptions */
 /** @typedef {import("./Module").NeedBuildContext} NeedBuildContext */
 /** @typedef {import("./Module").ReadOnlyRuntimeRequirements} ReadOnlyRuntimeRequirements */
-/** @typedef {import("./Module").SourceTypes} SourceTypes */
 /** @typedef {import("./ModuleGraph")} ModuleGraph */
 /** @typedef {import("./NormalModuleFactory")} NormalModuleFactory */
 /** @typedef {import("./RequestShortener")} RequestShortener */
@@ -53,10 +58,11 @@ const { register } = require("./util/serialization");
 /** @typedef {import("./util/fs").InputFileSystem} InputFileSystem */
 /** @typedef {import("./util/runtime").RuntimeSpec} RuntimeSpec */
 
-/** @typedef {{ attributes?: ImportAttributes }} ImportDependencyMeta */
+/** @typedef {{ attributes?: ImportAttributes, externalType: "import" | "module" | undefined }} ImportDependencyMeta */
 /** @typedef {{ layer?: string, supports?: string, media?: string }} CssImportDependencyMeta */
+/** @typedef {{ sourceType: "css-url" }} AssetDependencyMeta */
 
-/** @typedef {ImportDependencyMeta | CssImportDependencyMeta} DependencyMeta */
+/** @typedef {ImportDependencyMeta | CssImportDependencyMeta | AssetDependencyMeta} DependencyMeta */
 
 /**
  * @typedef {object} SourceData
@@ -67,8 +73,6 @@ const { register } = require("./util/serialization");
  * @property {ReadOnlyRuntimeRequirements=} runtimeRequirements
  */
 
-const TYPES = new Set(["javascript"]);
-const CSS_TYPES = new Set(["css-import"]);
 const RUNTIME_REQUIREMENTS = new Set([RuntimeGlobals.module]);
 const RUNTIME_REQUIREMENTS_FOR_SCRIPT = new Set([RuntimeGlobals.loadScript]);
 const RUNTIME_REQUIREMENTS_FOR_MODULE = new Set([
@@ -164,7 +168,10 @@ const getSourceForImportExternal = (
 	dependencyMeta
 ) => {
 	const importName = runtimeTemplate.outputOptions.importFunctionName;
-	if (!runtimeTemplate.supportsDynamicImport() && importName === "import") {
+	if (
+		!runtimeTemplate.supportsDynamicImport() &&
+		(importName === "import" || importName === "module-import")
+	) {
 		throw new Error(
 			"The target environment doesn't support 'import()' so it's not possible to use external type 'import'"
 		);
@@ -210,7 +217,7 @@ const getSourceForImportExternal = (
  */
 const importAssertionReplacer = (key, value) => {
 	if (key === "_isLegacyAssert") {
-		return undefined;
+		return;
 	}
 
 	return value;
@@ -353,7 +360,7 @@ const getSourceForModuleExternal = (
 		runtime,
 		runtimeTemplate
 	);
-	let expression = moduleRemapping || baseAccess;
+	const expression = moduleRemapping || baseAccess;
 	return {
 		expression,
 		init: moduleRemapping
@@ -415,11 +422,10 @@ const getSourceForScriptExternal = (urlAndGlobal, runtimeTemplate) => {
  * @param {RuntimeTemplate} runtimeTemplate the runtime template
  * @returns {string} the generated source
  */
-const checkExternalVariable = (variableName, request, runtimeTemplate) => {
-	return `if(typeof ${variableName} === 'undefined') { ${runtimeTemplate.throwMissingModuleErrorBlock(
+const checkExternalVariable = (variableName, request, runtimeTemplate) =>
+	`if(typeof ${variableName} === 'undefined') { ${runtimeTemplate.throwMissingModuleErrorBlock(
 		{ request }
 	)} }\n`;
-};
 
 /**
  * @param {string|number} id the module id
@@ -498,7 +504,18 @@ class ExternalModule extends Module {
 	 * @returns {SourceTypes} types available (do not mutate)
 	 */
 	getSourceTypes() {
-		return this.externalType === "css-import" ? CSS_TYPES : TYPES;
+		if (
+			this.externalType === "asset" &&
+			this.dependencyMeta &&
+			/** @type {AssetDependencyMeta} */
+			(this.dependencyMeta).sourceType === "css-url"
+		) {
+			return CSS_URL_TYPES;
+		} else if (this.externalType === "css-import") {
+			return CSS_IMPORT_TYPES;
+		}
+
+		return JS_TYPES;
 	}
 
 	/**
@@ -524,7 +541,7 @@ class ExternalModule extends Module {
 	 * @returns {string} a unique identifier of the module
 	 */
 	identifier() {
-		return `external ${this.externalType} ${JSON.stringify(this.request)}`;
+		return `external ${this._resolveExternalType(this.externalType)} ${JSON.stringify(this.request)}`;
 	}
 
 	/**
@@ -532,7 +549,7 @@ class ExternalModule extends Module {
 	 * @returns {string} a user readable identifier of the module
 	 */
 	readableIdentifier(requestShortener) {
-		return "external " + JSON.stringify(this.request);
+		return `external ${JSON.stringify(this.request)}`;
 	}
 
 	/**
@@ -658,7 +675,41 @@ class ExternalModule extends Module {
 		let { request, externalType } = this;
 		if (typeof request === "object" && !Array.isArray(request))
 			request = request[externalType];
+		externalType = this._resolveExternalType(externalType);
 		return { request, externalType };
+	}
+
+	/**
+	 * Resolve the detailed external type from the raw external type.
+	 * e.g. resolve "module" or "import" from "module-import" type
+	 * @param {string} externalType raw external type
+	 * @returns {string} resolved external type
+	 */
+	_resolveExternalType(externalType) {
+		if (externalType === "module-import") {
+			if (
+				this.dependencyMeta &&
+				/** @type {ImportDependencyMeta} */
+				(this.dependencyMeta).externalType
+			) {
+				return /** @type {ImportDependencyMeta} */ (this.dependencyMeta)
+					.externalType;
+			}
+			return "module";
+		} else if (externalType === "asset") {
+			if (
+				this.dependencyMeta &&
+				/** @type {AssetDependencyMeta} */
+				(this.dependencyMeta).sourceType
+			) {
+				return /** @type {AssetDependencyMeta} */ (this.dependencyMeta)
+					.sourceType;
+			}
+
+			return "asset";
+		}
+
+		return externalType;
 	}
 
 	/**
@@ -702,7 +753,8 @@ class ExternalModule extends Module {
 							request,
 							/** @type {string} */
 							(runtimeTemplate.outputOptions.importMetaName),
-							runtimeTemplate.supportNodePrefixForCoreModules()
+							/** @type {boolean} */
+							(runtimeTemplate.supportNodePrefixForCoreModules())
 						)
 					: getSourceForCommonJsExternal(request);
 			case "amd":
@@ -731,10 +783,11 @@ class ExternalModule extends Module {
 				if (!(/** @type {BuildInfo} */ (this.buildInfo).module)) {
 					if (!runtimeTemplate.supportsDynamicImport()) {
 						throw new Error(
-							"The target environment doesn't support dynamic import() syntax so it's not possible to use external type 'module' within a script" +
-								(runtimeTemplate.supportsEcmaScriptModuleSyntax()
+							`The target environment doesn't support dynamic import() syntax so it's not possible to use external type 'module' within a script${
+								runtimeTemplate.supportsEcmaScriptModuleSyntax()
 									? "\nDid you mean to build a EcmaScript Module ('output.module: true')?"
-									: "")
+									: ""
+							}`
 						);
 					}
 					return getSourceForImportExternal(
@@ -790,7 +843,13 @@ class ExternalModule extends Module {
 					new RawSource(`module.exports = ${JSON.stringify(request)};`)
 				);
 				const data = new Map();
-				data.set("url", request);
+				data.set("url", { javascript: request });
+				return { sources, runtimeRequirements: RUNTIME_REQUIREMENTS, data };
+			}
+			case "css-url": {
+				const sources = new Map();
+				const data = new Map();
+				data.set("url", { "css-url": request });
 				return { sources, runtimeRequirements: RUNTIME_REQUIREMENTS, data };
 			}
 			case "css-import": {
@@ -846,7 +905,7 @@ class ExternalModule extends Module {
 				if (sourceData.init)
 					sourceString = `${sourceData.init}\n${sourceString}`;
 
-				let data = undefined;
+				let data;
 				if (sourceData.chunkInitFragments) {
 					data = new Map();
 					data.set("chunkInitFragments", sourceData.chunkInitFragments);
@@ -899,7 +958,7 @@ class ExternalModule extends Module {
 	updateHash(hash, context) {
 		const { chunkGraph } = context;
 		hash.update(
-			`${this.externalType}${JSON.stringify(this.request)}${this.isOptional(
+			`${this._resolveExternalType(this.externalType)}${JSON.stringify(this.request)}${this.isOptional(
 				chunkGraph.moduleGraph
 			)}`
 		);

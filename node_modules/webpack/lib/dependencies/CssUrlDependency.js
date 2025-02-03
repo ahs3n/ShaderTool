@@ -12,10 +12,12 @@ const ModuleDependency = require("./ModuleDependency");
 
 /** @typedef {import("webpack-sources").ReplaceSource} ReplaceSource */
 /** @typedef {import("../ChunkGraph")} ChunkGraph */
+/** @typedef {import("../CodeGenerationResults")} CodeGenerationResults */
 /** @typedef {import("../Dependency")} Dependency */
 /** @typedef {import("../Dependency").UpdateHashContext} UpdateHashContext */
 /** @typedef {import("../DependencyTemplate").DependencyTemplateContext} DependencyTemplateContext */
 /** @typedef {import("../Module")} Module */
+/** @typedef {import("../Module").CodeGenerationResult} CodeGenerationResult */
 /** @typedef {import("../ModuleGraph")} ModuleGraph */
 /** @typedef {import("../ModuleGraphConnection")} ModuleGraphConnection */
 /** @typedef {import("../ModuleGraphConnection").ConnectionState} ConnectionState */
@@ -25,15 +27,15 @@ const ModuleDependency = require("./ModuleDependency");
 /** @typedef {import("../util/Hash")} Hash */
 /** @typedef {import("../util/runtime").RuntimeSpec} RuntimeSpec */
 
-const getIgnoredRawDataUrlModule = memoize(() => {
-	return new RawDataUrlModule("data:,", `ignored-asset`, `(ignored asset)`);
-});
+const getIgnoredRawDataUrlModule = memoize(
+	() => new RawDataUrlModule("data:,", "ignored-asset", "(ignored asset)")
+);
 
 class CssUrlDependency extends ModuleDependency {
 	/**
 	 * @param {string} request request
 	 * @param {Range} range range of the argument
-	 * @param {"string" | "url"} urlType dependency type e.g. url() or string
+	 * @param {"string" | "url" | "src"} urlType dependency type e.g. url() or string
 	 */
 	constructor(request, range, urlType) {
 		super(request);
@@ -106,9 +108,8 @@ const cssEscapeString = str => {
 		return str.replace(/[\n\t ()'"\\]/g, m => `\\${m}`);
 	} else if (countQuotation <= countApostrophe) {
 		return `"${str.replace(/[\n"\\]/g, m => `\\${m}`)}"`;
-	} else {
-		return `'${str.replace(/[\n'\\]/g, m => `\\${m}`)}'`;
 	}
+	return `'${str.replace(/[\n'\\]/g, m => `\\${m}`)}'`;
 };
 
 CssUrlDependency.Template = class CssUrlDependencyTemplate extends (
@@ -134,7 +135,7 @@ CssUrlDependency.Template = class CssUrlDependencyTemplate extends (
 		switch (dep.urlType) {
 			case "string":
 				newValue = cssEscapeString(
-					runtimeTemplate.assetUrl({
+					this.assetUrl({
 						module,
 						codeGenerationResults
 					})
@@ -142,7 +143,15 @@ CssUrlDependency.Template = class CssUrlDependencyTemplate extends (
 				break;
 			case "url":
 				newValue = `url(${cssEscapeString(
-					runtimeTemplate.assetUrl({
+					this.assetUrl({
+						module,
+						codeGenerationResults
+					})
+				)})`;
+				break;
+			case "src":
+				newValue = `src(${cssEscapeString(
+					this.assetUrl({
 						module,
 						codeGenerationResults
 					})
@@ -155,6 +164,27 @@ CssUrlDependency.Template = class CssUrlDependencyTemplate extends (
 			dep.range[1] - 1,
 			/** @type {string} */ (newValue)
 		);
+	}
+
+	/**
+	 * @param {object} options options object
+	 * @param {Module} options.module the module
+	 * @param {RuntimeSpec=} options.runtime runtime
+	 * @param {CodeGenerationResults} options.codeGenerationResults the code generation results
+	 * @returns {string} the url of the asset
+	 */
+	assetUrl({ runtime, module, codeGenerationResults }) {
+		if (!module) {
+			return "data:,";
+		}
+		const codeGen = codeGenerationResults.get(module, runtime);
+		const data =
+			/** @type {NonNullable<CodeGenerationResult["data"]>} */
+			(codeGen.data);
+		if (!data) return "data:,";
+		const url = data.get("url");
+		if (!url || !url["css-url"]) return "data:,";
+		return url["css-url"];
 	}
 };
 

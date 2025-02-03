@@ -27,7 +27,7 @@ const LogType = Object.freeze({
 	status: /** @type {"status"} */ ("status") // message, arguments
 });
 
-exports.LogType = LogType;
+module.exports.LogType = LogType;
 
 /** @typedef {typeof LogType[keyof typeof LogType]} LogTypeEnum */
 
@@ -37,7 +37,7 @@ const TIMERS_AGGREGATES_SYMBOL = Symbol("webpack logger aggregated times");
 
 class WebpackLogger {
 	/**
-	 * @param {function(LogTypeEnum, any[]=): void} log log function
+	 * @param {function(LogTypeEnum, EXPECTED_ANY[]=): void} log log function
 	 * @param {function(string | function(): string): WebpackLogger} getChildLogger function to create child logger
 	 */
 	constructor(log, getChildLogger) {
@@ -45,26 +45,45 @@ class WebpackLogger {
 		this.getChildLogger = getChildLogger;
 	}
 
+	/**
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	error(...args) {
 		this[LOG_SYMBOL](LogType.error, args);
 	}
 
+	/**
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	warn(...args) {
 		this[LOG_SYMBOL](LogType.warn, args);
 	}
 
+	/**
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	info(...args) {
 		this[LOG_SYMBOL](LogType.info, args);
 	}
 
+	/**
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	log(...args) {
 		this[LOG_SYMBOL](LogType.log, args);
 	}
 
+	/**
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	debug(...args) {
 		this[LOG_SYMBOL](LogType.debug, args);
 	}
 
+	/**
+	 * @param {EXPECTED_ANY} assertion assertion
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	assert(assertion, ...args) {
 		if (!assertion) {
 			this[LOG_SYMBOL](LogType.error, args);
@@ -79,20 +98,29 @@ class WebpackLogger {
 		this[LOG_SYMBOL](LogType.clear);
 	}
 
+	/**
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	status(...args) {
 		this[LOG_SYMBOL](LogType.status, args);
 	}
 
+	/**
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	group(...args) {
 		this[LOG_SYMBOL](LogType.group, args);
 	}
 
+	/**
+	 * @param {...EXPECTED_ANY} args args
+	 */
 	groupCollapsed(...args) {
 		this[LOG_SYMBOL](LogType.groupCollapsed, args);
 	}
 
-	groupEnd(...args) {
-		this[LOG_SYMBOL](LogType.groupEnd, args);
+	groupEnd() {
+		this[LOG_SYMBOL](LogType.groupEnd);
 	}
 
 	/**
@@ -185,4 +213,4 @@ class WebpackLogger {
 	}
 }
 
-exports.Logger = WebpackLogger;
+module.exports.Logger = WebpackLogger;

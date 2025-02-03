@@ -5,30 +5,17 @@
 
 "use strict";
 
+const {
+	DEFAULT_EXPORT,
+	NAMESPACE_OBJECT_EXPORT
+} = require("./util/concatenate");
+
 /** @typedef {import("./Module")} Module */
+/** @typedef {import("./optimize/ConcatenatedModule").ConcatenatedModuleInfo} ConcatenatedModuleInfo */
+/** @typedef {import("./optimize/ConcatenatedModule").ModuleInfo} ModuleInfo */
 
 const MODULE_REFERENCE_REGEXP =
 	/^__WEBPACK_MODULE_REFERENCE__(\d+)_([\da-f]+|ns)(_call)?(_directImport)?(?:_asiSafe(\d))?__$/;
-
-const DEFAULT_EXPORT = "__WEBPACK_DEFAULT_EXPORT__";
-const NAMESPACE_OBJECT_EXPORT = "__WEBPACK_NAMESPACE_OBJECT__";
-
-/**
- * @typedef {object} ExternalModuleInfo
- * @property {number} index
- * @property {Module} module
- */
-
-/**
- * @typedef {object} ConcatenatedModuleInfo
- * @property {number} index
- * @property {Module} module
- * @property {Map<string, string>} exportMap mapping from export name to symbol
- * @property {Map<string, string>} rawExportMap mapping from export name to symbol
- * @property {string=} namespaceExportSymbol
- */
-
-/** @typedef {ConcatenatedModuleInfo | ExternalModuleInfo} ModuleInfo */
 
 /**
  * @typedef {object} ModuleReferenceOptions
@@ -64,7 +51,6 @@ class ConcatenationScope {
 	}
 
 	/**
-	 *
 	 * @param {string} exportName name of the export
 	 * @param {string} symbol identifier of the export in source code
 	 */
@@ -78,7 +64,6 @@ class ConcatenationScope {
 	}
 
 	/**
-	 *
 	 * @param {string} exportName name of the export
 	 * @param {string} expression expression to be used
 	 */
@@ -99,7 +84,6 @@ class ConcatenationScope {
 	}
 
 	/**
-	 *
 	 * @param {Module} module the referenced module
 	 * @param {Partial<ModuleReferenceOptions>} options options
 	 * @returns {string} the reference as identifier
@@ -138,7 +122,7 @@ class ConcatenationScope {
 	static matchModuleReference(name) {
 		const match = MODULE_REFERENCE_REGEXP.exec(name);
 		if (!match) return null;
-		const index = +match[1];
+		const index = Number(match[1]);
 		const asiSafe = match[5];
 		return {
 			index,
@@ -146,8 +130,8 @@ class ConcatenationScope {
 				match[2] === "ns"
 					? []
 					: JSON.parse(Buffer.from(match[2], "hex").toString("utf-8")),
-			call: !!match[3],
-			directImport: !!match[4],
+			call: Boolean(match[3]),
+			directImport: Boolean(match[4]),
 			asiSafe: asiSafe ? asiSafe === "1" : undefined
 		};
 	}

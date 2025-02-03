@@ -5,13 +5,17 @@
 
 "use strict";
 
+const { SyncWaterfallHook, SyncHook } = require("tapable");
 const {
 	ConcatSource,
 	PrefixSource,
 	ReplaceSource,
-	CachedSource
+	CachedSource,
+	RawSource
 } = require("webpack-sources");
+const Compilation = require("../Compilation");
 const CssModule = require("../CssModule");
+const { tryRunOrWebpackError } = require("../HookWebpackError");
 const HotUpdateChunk = require("../HotUpdateChunk");
 const {
 	CSS_MODULE_TYPE,
@@ -21,34 +25,66 @@ const {
 } = require("../ModuleTypeConstants");
 const RuntimeGlobals = require("../RuntimeGlobals");
 const SelfModuleFactory = require("../SelfModuleFactory");
+const Template = require("../Template");
 const WebpackError = require("../WebpackError");
-const CssExportDependency = require("../dependencies/CssExportDependency");
+const CssIcssExportDependency = require("../dependencies/CssIcssExportDependency");
+const CssIcssImportDependency = require("../dependencies/CssIcssImportDependency");
+const CssIcssSymbolDependency = require("../dependencies/CssIcssSymbolDependency");
 const CssImportDependency = require("../dependencies/CssImportDependency");
 const CssLocalIdentifierDependency = require("../dependencies/CssLocalIdentifierDependency");
 const CssSelfLocalIdentifierDependency = require("../dependencies/CssSelfLocalIdentifierDependency");
 const CssUrlDependency = require("../dependencies/CssUrlDependency");
 const StaticExportsDependency = require("../dependencies/StaticExportsDependency");
+const JavascriptModulesPlugin = require("../javascript/JavascriptModulesPlugin");
 const { compareModulesByIdentifier } = require("../util/comparators");
 const createSchemaValidation = require("../util/create-schema-validation");
 const createHash = require("../util/createHash");
 const { getUndoPath } = require("../util/identifier");
 const memoize = require("../util/memoize");
 const nonNumericOnlyHash = require("../util/nonNumericOnlyHash");
-const CssExportsGenerator = require("./CssExportsGenerator");
 const CssGenerator = require("./CssGenerator");
 const CssParser = require("./CssParser");
 
 /** @typedef {import("webpack-sources").Source} Source */
-/** @typedef {import("../../declarations/WebpackOptions").Output} OutputOptions */
+/** @typedef {import("../../declarations/WebpackOptions").OutputNormalized} OutputOptions */
 /** @typedef {import("../Chunk")} Chunk */
 /** @typedef {import("../ChunkGraph")} ChunkGraph */
 /** @typedef {import("../CodeGenerationResults")} CodeGenerationResults */
-/** @typedef {import("../Compilation")} Compilation */
+/** @typedef {import("../Compilation").ChunkHashContext} ChunkHashContext */
 /** @typedef {import("../Compiler")} Compiler */
 /** @typedef {import("../CssModule").Inheritance} Inheritance */
-/** @typedef {import("../DependencyTemplate").CssExportsData} CssExportsData */
 /** @typedef {import("../Module")} Module */
+/** @typedef {import("../Template").RuntimeTemplate} RuntimeTemplate */
+/** @typedef {import("../TemplatedPathPlugin").TemplatePath} TemplatePath */
+/** @typedef {import("../util/Hash")} Hash */
+/** @typedef {import("../util/createHash").Algorithm} Algorithm */
 /** @typedef {import("../util/memoize")} Memoize */
+
+/**
+ * @typedef {object} RenderContext
+ * @property {Chunk} chunk the chunk
+ * @property {ChunkGraph} chunkGraph the chunk graph
+ * @property {CodeGenerationResults} codeGenerationResults results of code generation
+ * @property {RuntimeTemplate} runtimeTemplate the runtime template
+ * @property {string} uniqueName the unique name
+ * @property {string} undoPath undo path to css file
+ * @property {CssModule[]} modules modules
+ */
+
+/**
+ * @typedef {object} ChunkRenderContext
+ * @property {Chunk} chunk the chunk
+ * @property {ChunkGraph} chunkGraph the chunk graph
+ * @property {CodeGenerationResults} codeGenerationResults results of code generation
+ * @property {RuntimeTemplate} runtimeTemplate the runtime template
+ * @property {string} undoPath undo path to css file
+ */
+
+/**
+ * @typedef {object} CompilationHooks
+ * @property {SyncWaterfallHook<[Source, Module, ChunkRenderContext]>} renderModulePackage
+ * @property {SyncHook<[Chunk, Hash, ChunkHashContext]>} chunkHash
+ */
 
 const getCssLoadingRuntimeModule = memoize(() =>
 	require("./CssLoadingRuntimeModule")
@@ -120,57 +156,40 @@ const validateParserOptions = {
 	)
 };
 
-/**
- * @param {string} str string
- * @param {boolean=} omitOptionalUnderscore if true, optional underscore is not added
- * @returns {string} escaped string
- */
-const escapeCss = (str, omitOptionalUnderscore) => {
-	const escaped = `${str}`.replace(
-		// cspell:word uffff
-		/[^a-zA-Z0-9_\u0081-\uffff-]/g,
-		s => `\\${s}`
-	);
-	return !omitOptionalUnderscore && /^(?!--)[0-9_-]/.test(escaped)
-		? `_${escaped}`
-		: escaped;
-};
+/** @type {WeakMap<Compilation, CompilationHooks>} */
+const compilationHooksMap = new WeakMap();
 
-/**
- * @param {string} str string
- * @returns {string} encoded string
- */
-const LZWEncode = str => {
-	/** @type {Map<string, string>} */
-	const map = new Map();
-	let encoded = "";
-	let phrase = str[0];
-	let code = 256;
-	let maxCode = "\uffff".charCodeAt(0);
-	for (let i = 1; i < str.length; i++) {
-		const c = str[i];
-		if (map.has(phrase + c)) {
-			phrase += c;
-		} else {
-			encoded += phrase.length > 1 ? map.get(phrase) : phrase;
-			map.set(phrase + c, String.fromCharCode(code));
-			phrase = c;
-			if (++code > maxCode) {
-				code = 256;
-				map.clear();
-			}
-		}
-	}
-	encoded += phrase.length > 1 ? map.get(phrase) : phrase;
-	return encoded;
-};
-
-const plugin = "CssModulesPlugin";
+const PLUGIN_NAME = "CssModulesPlugin";
 
 class CssModulesPlugin {
+	/**
+	 * @param {Compilation} compilation the compilation
+	 * @returns {CompilationHooks} the attached hooks
+	 */
+	static getCompilationHooks(compilation) {
+		if (!(compilation instanceof Compilation)) {
+			throw new TypeError(
+				"The 'compilation' argument must be an instance of Compilation"
+			);
+		}
+		let hooks = compilationHooksMap.get(compilation);
+		if (hooks === undefined) {
+			hooks = {
+				renderModulePackage: new SyncWaterfallHook([
+					"source",
+					"module",
+					"renderContext"
+				]),
+				chunkHash: new SyncHook(["chunk", "hash", "context"])
+			};
+			compilationHooksMap.set(compilation, hooks);
+		}
+		return hooks;
+	}
+
 	constructor() {
 		/** @type {WeakMap<Source, { undoPath: string, inheritance: Inheritance, source: CachedSource }>} */
-		this._moduleCache = new WeakMap();
+		this._moduleFactoryCache = new WeakMap();
 	}
 
 	/**
@@ -180,9 +199,18 @@ class CssModulesPlugin {
 	 */
 	apply(compiler) {
 		compiler.hooks.compilation.tap(
-			plugin,
+			PLUGIN_NAME,
 			(compilation, { normalModuleFactory }) => {
+				const hooks = CssModulesPlugin.getCompilationHooks(compilation);
 				const selfFactory = new SelfModuleFactory(compilation.moduleGraph);
+				compilation.dependencyFactories.set(
+					CssImportDependency,
+					normalModuleFactory
+				);
+				compilation.dependencyTemplates.set(
+					CssImportDependency,
+					new CssImportDependency.Template()
+				);
 				compilation.dependencyFactories.set(
 					CssUrlDependency,
 					normalModuleFactory
@@ -203,17 +231,21 @@ class CssModulesPlugin {
 					CssSelfLocalIdentifierDependency,
 					new CssSelfLocalIdentifierDependency.Template()
 				);
-				compilation.dependencyTemplates.set(
-					CssExportDependency,
-					new CssExportDependency.Template()
-				);
 				compilation.dependencyFactories.set(
-					CssImportDependency,
+					CssIcssImportDependency,
 					normalModuleFactory
 				);
 				compilation.dependencyTemplates.set(
-					CssImportDependency,
-					new CssImportDependency.Template()
+					CssIcssImportDependency,
+					new CssIcssImportDependency.Template()
+				);
+				compilation.dependencyTemplates.set(
+					CssIcssExportDependency,
+					new CssIcssExportDependency.Template()
+				);
+				compilation.dependencyTemplates.set(
+					CssIcssSymbolDependency,
+					new CssIcssSymbolDependency.Template()
 				);
 				compilation.dependencyTemplates.set(
 					StaticExportsDependency,
@@ -227,48 +259,50 @@ class CssModulesPlugin {
 				]) {
 					normalModuleFactory.hooks.createParser
 						.for(type)
-						.tap(plugin, parserOptions => {
+						.tap(PLUGIN_NAME, parserOptions => {
 							validateParserOptions[type](parserOptions);
-							const { namedExports } = parserOptions;
+							const { url, import: importOption, namedExports } = parserOptions;
 
 							switch (type) {
-								case CSS_MODULE_TYPE_GLOBAL:
-								case CSS_MODULE_TYPE_AUTO:
-									return new CssParser({
-										namedExports
-									});
 								case CSS_MODULE_TYPE:
 									return new CssParser({
-										allowModeSwitch: false,
+										importOption,
+										url,
+										namedExports
+									});
+								case CSS_MODULE_TYPE_GLOBAL:
+									return new CssParser({
+										defaultMode: "global",
+										importOption,
+										url,
 										namedExports
 									});
 								case CSS_MODULE_TYPE_MODULE:
 									return new CssParser({
 										defaultMode: "local",
+										importOption,
+										url,
+										namedExports
+									});
+								case CSS_MODULE_TYPE_AUTO:
+									return new CssParser({
+										defaultMode: "auto",
+										importOption,
+										url,
 										namedExports
 									});
 							}
 						});
 					normalModuleFactory.hooks.createGenerator
 						.for(type)
-						.tap(plugin, generatorOptions => {
+						.tap(PLUGIN_NAME, generatorOptions => {
 							validateGeneratorOptions[type](generatorOptions);
 
-							return generatorOptions.exportsOnly
-								? new CssExportsGenerator(
-										generatorOptions.exportsConvention,
-										generatorOptions.localIdentName,
-										generatorOptions.esModule
-									)
-								: new CssGenerator(
-										generatorOptions.exportsConvention,
-										generatorOptions.localIdentName,
-										generatorOptions.esModule
-									);
+							return new CssGenerator(generatorOptions);
 						});
 					normalModuleFactory.hooks.createModuleClass
 						.for(type)
-						.tap(plugin, (createData, resolveData) => {
+						.tap(PLUGIN_NAME, (createData, resolveData) => {
 							if (resolveData.dependencies.length > 0) {
 								// When CSS is imported from CSS there is only one dependency
 								const dependency = resolveData.dependencies[0];
@@ -283,8 +317,7 @@ class CssModulesPlugin {
 										let inheritance;
 
 										if (
-											(parent.cssLayer !== null &&
-												parent.cssLayer !== undefined) ||
+											parent.cssLayer !== undefined ||
 											parent.supports ||
 											parent.media
 										) {
@@ -328,8 +361,38 @@ class CssModulesPlugin {
 							return new CssModule(createData);
 						});
 				}
+
+				JavascriptModulesPlugin.getCompilationHooks(
+					compilation
+				).renderModuleContent.tap(PLUGIN_NAME, (source, module) => {
+					if (module instanceof CssModule && module.hot) {
+						const exports = module.buildInfo.cssData.exports;
+						const stringifiedExports = JSON.stringify(
+							JSON.stringify(
+								Array.from(exports).reduce((obj, [key, value]) => {
+									obj[key] = value;
+									return obj;
+								}, {})
+							)
+						);
+
+						const hmrCode = Template.asString([
+							"",
+							`var __webpack_css_exports__ = ${stringifiedExports};`,
+							"// only invalidate when locals change",
+							"if (module.hot.data && module.hot.data.__webpack_css_exports__ && module.hot.data.__webpack_css_exports__ != __webpack_css_exports__) {",
+							Template.indent("module.hot.invalidate();"),
+							"} else {",
+							Template.indent("module.hot.accept();"),
+							"}",
+							"module.hot.dispose(function(data) { data.__webpack_css_exports__ = __webpack_css_exports__; });"
+						]);
+
+						return new ConcatSource(source, "\n", new RawSource(hmrCode));
+					}
+				});
 				const orderedCssModulesPerChunk = new WeakMap();
-				compilation.hooks.afterCodeGeneration.tap("CssModulesPlugin", () => {
+				compilation.hooks.afterCodeGeneration.tap(PLUGIN_NAME, () => {
 					const { chunkGraph } = compilation;
 					for (const chunk of compilation.chunks) {
 						if (CssModulesPlugin.chunkHasCss(chunk, chunkGraph)) {
@@ -340,9 +403,15 @@ class CssModulesPlugin {
 						}
 					}
 				});
-				compilation.hooks.contentHash.tap("CssModulesPlugin", chunk => {
+				compilation.hooks.chunkHash.tap(PLUGIN_NAME, (chunk, hash, context) => {
+					hooks.chunkHash.call(chunk, hash, context);
+				});
+				compilation.hooks.contentHash.tap(PLUGIN_NAME, chunk => {
 					const {
 						chunkGraph,
+						codeGenerationResults,
+						moduleGraph,
+						runtimeTemplate,
 						outputOptions: {
 							hashSalt,
 							hashDigest,
@@ -350,19 +419,31 @@ class CssModulesPlugin {
 							hashFunction
 						}
 					} = compilation;
-					const modules = orderedCssModulesPerChunk.get(chunk);
-					if (modules === undefined) return;
-					const hash = createHash(hashFunction);
+					const hash = createHash(/** @type {Algorithm} */ (hashFunction));
 					if (hashSalt) hash.update(hashSalt);
-					for (const module of modules) {
-						hash.update(chunkGraph.getModuleHash(module, chunk.runtime));
+					hooks.chunkHash.call(chunk, hash, {
+						chunkGraph,
+						codeGenerationResults,
+						moduleGraph,
+						runtimeTemplate
+					});
+					const modules = orderedCssModulesPerChunk.get(chunk);
+					if (modules) {
+						for (const module of modules) {
+							hash.update(chunkGraph.getModuleHash(module, chunk.runtime));
+						}
 					}
 					const digest = /** @type {string} */ (hash.digest(hashDigest));
-					chunk.contentHash.css = nonNumericOnlyHash(digest, hashDigestLength);
+					chunk.contentHash.css = nonNumericOnlyHash(
+						digest,
+						/** @type {number} */
+						(hashDigestLength)
+					);
 				});
-				compilation.hooks.renderManifest.tap(plugin, (result, options) => {
+				compilation.hooks.renderManifest.tap(PLUGIN_NAME, (result, options) => {
 					const { chunkGraph } = compilation;
-					const { hash, chunk, codeGenerationResults } = options;
+					const { hash, chunk, codeGenerationResults, runtimeTemplate } =
+						options;
 
 					if (chunk instanceof HotUpdateChunk) return result;
 
@@ -383,21 +464,24 @@ class CssModulesPlugin {
 						);
 						const undoPath = getUndoPath(
 							filename,
-							compilation.outputOptions.path,
+							/** @type {string} */
+							(compilation.outputOptions.path),
 							false
 						);
 						result.push({
 							render: () =>
-								this.renderChunk({
-									chunk,
-									chunkGraph,
-									codeGenerationResults,
-									uniqueName: compilation.outputOptions.uniqueName,
-									cssHeadDataCompression:
-										compilation.outputOptions.cssHeadDataCompression,
-									undoPath,
-									modules
-								}),
+								this.renderChunk(
+									{
+										chunk,
+										chunkGraph,
+										codeGenerationResults,
+										uniqueName: compilation.outputOptions.uniqueName,
+										undoPath,
+										modules,
+										runtimeTemplate
+									},
+									hooks
+								),
 							filename,
 							info,
 							identifier: `css${chunk.id}`,
@@ -429,10 +513,6 @@ class CssModulesPlugin {
 					onceForChunkSet.add(chunk);
 					if (!isEnabledForChunk(chunk)) return;
 
-					set.add(RuntimeGlobals.publicPath);
-					set.add(RuntimeGlobals.getChunkCssFilename);
-					set.add(RuntimeGlobals.hasOwnProperty);
-					set.add(RuntimeGlobals.moduleFactoriesAddOnly);
 					set.add(RuntimeGlobals.makeNamespaceObject);
 
 					const CssLoadingRuntimeModule = getCssLoadingRuntimeModule();
@@ -440,13 +520,47 @@ class CssModulesPlugin {
 				};
 				compilation.hooks.runtimeRequirementInTree
 					.for(RuntimeGlobals.hasCssModules)
-					.tap(plugin, handler);
+					.tap(PLUGIN_NAME, handler);
 				compilation.hooks.runtimeRequirementInTree
 					.for(RuntimeGlobals.ensureChunkHandlers)
-					.tap(plugin, handler);
+					.tap(PLUGIN_NAME, (chunk, set, { chunkGraph }) => {
+						if (!isEnabledForChunk(chunk)) return;
+						if (
+							!chunkGraph.hasModuleInGraph(
+								chunk,
+								m =>
+									m.type === CSS_MODULE_TYPE ||
+									m.type === CSS_MODULE_TYPE_GLOBAL ||
+									m.type === CSS_MODULE_TYPE_MODULE ||
+									m.type === CSS_MODULE_TYPE_AUTO
+							)
+						) {
+							return;
+						}
+
+						set.add(RuntimeGlobals.hasOwnProperty);
+						set.add(RuntimeGlobals.publicPath);
+						set.add(RuntimeGlobals.getChunkCssFilename);
+					});
 				compilation.hooks.runtimeRequirementInTree
 					.for(RuntimeGlobals.hmrDownloadUpdateHandlers)
-					.tap(plugin, handler);
+					.tap(PLUGIN_NAME, (chunk, set, { chunkGraph }) => {
+						if (!isEnabledForChunk(chunk)) return;
+						if (
+							!chunkGraph.hasModuleInGraph(
+								chunk,
+								m =>
+									m.type === CSS_MODULE_TYPE ||
+									m.type === CSS_MODULE_TYPE_GLOBAL ||
+									m.type === CSS_MODULE_TYPE_MODULE ||
+									m.type === CSS_MODULE_TYPE_AUTO
+							)
+						) {
+							return;
+						}
+						set.add(RuntimeGlobals.publicPath);
+						set.add(RuntimeGlobals.getChunkCssFilename);
+					});
 			}
 		);
 	}
@@ -467,12 +581,10 @@ class CssModulesPlugin {
 		// Lists are in reverse order to allow to use Array.pop()
 		const modulesByChunkGroup = Array.from(chunk.groupsIterable, chunkGroup => {
 			const sortedModules = modulesList
-				.map(module => {
-					return {
-						module,
-						index: chunkGroup.getModulePostOrderIndex(module)
-					};
-				})
+				.map(module => ({
+					module,
+					index: chunkGroup.getModulePostOrderIndex(module)
+				}))
 				.filter(item => item.index !== undefined)
 				.sort(
 					(a, b) =>
@@ -486,13 +598,17 @@ class CssModulesPlugin {
 		if (modulesByChunkGroup.length === 1)
 			return modulesByChunkGroup[0].list.reverse();
 
+		/**
+		 * @param {{ list: Module[] }} a a
+		 * @param {{ list: Module[] }} b b
+		 * @returns {-1 | 0 | 1} result
+		 */
 		const compareModuleLists = ({ list: a }, { list: b }) => {
 			if (a.length === 0) {
 				return b.length === 0 ? 0 : 1;
-			} else {
-				if (b.length === 0) return -1;
-				return compareModulesByIdentifier(a[a.length - 1], b[b.length - 1]);
 			}
+			if (b.length === 0) return -1;
+			return compareModulesByIdentifier(a[a.length - 1], b[b.length - 1]);
 		};
 
 		modulesByChunkGroup.sort(compareModuleLists);
@@ -509,7 +625,7 @@ class CssModulesPlugin {
 			}
 			/** @type {Module} */
 			let selectedModule = list[list.length - 1];
-			let hasFailed = undefined;
+			let hasFailed;
 			outer: for (;;) {
 				for (const { list, set } of modulesByChunkGroup) {
 					if (list.length === 0) continue;
@@ -595,23 +711,13 @@ class CssModulesPlugin {
 	}
 
 	/**
-	 * @param {object} options options
-	 * @param {string[]} options.metaData meta data
-	 * @param {string} options.undoPath undo path for public path auto
-	 * @param {Chunk} options.chunk chunk
-	 * @param {ChunkGraph} options.chunkGraph chunk graph
-	 * @param {CodeGenerationResults} options.codeGenerationResults code generation results
-	 * @param {CssModule} options.module css module
+	 * @param {CssModule}  module css module
+	 * @param {ChunkRenderContext} renderContext options object
+	 * @param {CompilationHooks} hooks hooks
 	 * @returns {Source} css module source
 	 */
-	renderModule({
-		metaData,
-		undoPath,
-		chunk,
-		chunkGraph,
-		codeGenerationResults,
-		module
-	}) {
+	renderModule(module, renderContext, hooks) {
+		const { codeGenerationResults, chunk, undoPath } = renderContext;
 		const codeGenResult = codeGenerationResults.get(module, chunk.runtime);
 		const moduleSourceContent =
 			/** @type {Source} */
@@ -619,11 +725,10 @@ class CssModulesPlugin {
 				codeGenResult.sources.get("css") ||
 					codeGenResult.sources.get("css-import")
 			);
-
-		const cacheEntry = this._moduleCache.get(moduleSourceContent);
+		const cacheEntry = this._moduleFactoryCache.get(moduleSourceContent);
 
 		/** @type {Inheritance} */
-		let inheritance = [[module.cssLayer, module.supports, module.media]];
+		const inheritance = [[module.cssLayer, module.supports, module.media]];
 		if (module.inheritance) {
 			inheritance.push(...module.inheritance);
 		}
@@ -642,9 +747,9 @@ class CssModulesPlugin {
 		) {
 			source = cacheEntry.source;
 		} else {
-			const moduleSourceCode = /** @type {string} */ (
-				moduleSourceContent.source()
-			);
+			const moduleSourceCode =
+				/** @type {string} */
+				(moduleSourceContent.source());
 			const publicPathAutoRegex = new RegExp(
 				CssUrlDependency.PUBLIC_PATH_AUTO,
 				"g"
@@ -696,100 +801,72 @@ class CssModulesPlugin {
 			}
 
 			source = new CachedSource(moduleSource);
-			this._moduleCache.set(moduleSourceContent, {
+			this._moduleFactoryCache.set(moduleSourceContent, {
 				inheritance,
 				undoPath,
 				source
 			});
 		}
-		/** @type {CssExportsData | undefined} */
-		const cssExportsData =
-			codeGenResult.data && codeGenResult.data.get("css-exports");
-		const exports = cssExportsData && cssExportsData.exports;
-		const esModule = cssExportsData && cssExportsData.esModule;
-		let moduleId = chunkGraph.getModuleId(module) + "";
 
-		// When `optimization.moduleIds` is `named` the module id is a path, so we need to normalize it between platforms
-		if (typeof moduleId === "string") {
-			moduleId = moduleId.replace(/\\/g, "/");
-		}
-
-		metaData.push(
-			`${
-				exports
-					? Array.from(
-							exports,
-							([n, v]) => `${escapeCss(n)}:${escapeCss(v)}/`
-						).join("")
-					: ""
-			}${esModule ? "&" : ""}${escapeCss(moduleId)}`
+		return tryRunOrWebpackError(
+			() => hooks.renderModulePackage.call(source, module, renderContext),
+			"CssModulesPlugin.getCompilationHooks().renderModulePackage"
 		);
-		return source;
 	}
 
 	/**
-	 * @param {object} options options
-	 * @param {string | undefined} options.uniqueName unique name
-	 * @param {boolean | undefined} options.cssHeadDataCompression compress css head data
-	 * @param {string} options.undoPath undo path for public path auto
-	 * @param {Chunk} options.chunk chunk
-	 * @param {ChunkGraph} options.chunkGraph chunk graph
-	 * @param {CodeGenerationResults} options.codeGenerationResults code generation results
-	 * @param {CssModule[]} options.modules ordered css modules
+	 * @param {RenderContext} renderContext the render context
+	 * @param {CompilationHooks} hooks hooks
 	 * @returns {Source} generated source
 	 */
-	renderChunk({
-		uniqueName,
-		cssHeadDataCompression,
-		undoPath,
-		chunk,
-		chunkGraph,
-		codeGenerationResults,
-		modules
-	}) {
+	renderChunk(
+		{
+			undoPath,
+			chunk,
+			chunkGraph,
+			codeGenerationResults,
+			modules,
+			runtimeTemplate
+		},
+		hooks
+	) {
 		const source = new ConcatSource();
-		/** @type {string[]} */
-		const metaData = [];
 		for (const module of modules) {
 			try {
-				const moduleSource = this.renderModule({
-					metaData,
-					undoPath,
-					chunk,
-					chunkGraph,
-					codeGenerationResults,
-					module
-				});
+				const moduleSource = this.renderModule(
+					module,
+					{
+						undoPath,
+						chunk,
+						chunkGraph,
+						codeGenerationResults,
+						runtimeTemplate
+					},
+					hooks
+				);
 				source.add(moduleSource);
-			} catch (e) {
+			} catch (err) {
 				/** @type {Error} */
-				(e).message += `\nduring rendering of css ${module.identifier()}`;
-				throw e;
+				(err).message += `\nduring rendering of css ${module.identifier()}`;
+				throw err;
 			}
 		}
-		const metaDataStr = metaData.join(",");
-		source.add(
-			`head{--webpack-${escapeCss(
-				(uniqueName ? uniqueName + "-" : "") + chunk.id,
-				true
-			)}:${cssHeadDataCompression ? LZWEncode(metaDataStr) : metaDataStr};}`
-		);
+		chunk.rendered = true;
 		return source;
 	}
 
 	/**
 	 * @param {Chunk} chunk chunk
 	 * @param {OutputOptions} outputOptions output options
-	 * @returns {Chunk["cssFilenameTemplate"] | OutputOptions["cssFilename"] | OutputOptions["cssChunkFilename"]} used filename template
+	 * @returns {TemplatePath} used filename template
 	 */
 	static getChunkFilenameTemplate(chunk, outputOptions) {
 		if (chunk.cssFilenameTemplate) {
 			return chunk.cssFilenameTemplate;
 		} else if (chunk.canBeInitial()) {
-			return outputOptions.cssFilename;
-		} else {
-			return outputOptions.cssChunkFilename;
+			return /** @type {TemplatePath} */ (outputOptions.cssFilename);
 		}
+		return /** @type {TemplatePath} */ (outputOptions.cssChunkFilename);
 	}
 
 	/**
@@ -799,8 +876,10 @@ class CssModulesPlugin {
 	 */
 	static chunkHasCss(chunk, chunkGraph) {
 		return (
-			!!chunkGraph.getChunkModulesIterableBySourceType(chunk, "css") ||
-			!!chunkGraph.getChunkModulesIterableBySourceType(chunk, "css-import")
+			Boolean(chunkGraph.getChunkModulesIterableBySourceType(chunk, "css")) ||
+			Boolean(
+				chunkGraph.getChunkModulesIterableBySourceType(chunk, "css-import")
+			)
 		);
 	}
 }

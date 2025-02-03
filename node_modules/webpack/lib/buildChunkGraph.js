@@ -38,6 +38,7 @@ const { getEntryRuntime, mergeRuntime } = require("./util/runtime");
  * @typedef {object} ChunkGroupInfo
  * @property {ChunkGroup} chunkGroup the chunk group
  * @property {RuntimeSpec} runtime the runtimes
+ * @property {boolean} initialized is this chunk group initialized
  * @property {bigint | undefined} minAvailableModules current minimal set of modules available at this point
  * @property {bigint[]} availableModulesToBeMerged enqueued updates to the minimal set of available modules
  * @property {Set<Module>=} skippedItems modules that were skipped because module is already available in parent chunks (need to reconsider when minAvailableModules is shrinking)
@@ -209,7 +210,7 @@ const extractBlockModules = (module, moduleGraph, runtime, blockModulesMap) => {
 					const merged = /** @type {ConnectionState} */ (modules[idx]);
 					/** @type {ModuleGraphConnection[]} */
 					(/** @type {unknown} */ (modules[idx + 1])).push(connection);
-					if (merged === true) continue outer;
+					if (merged === true) continue;
 					modules[idx] = ModuleGraphConnection.addConnectionStates(
 						merged,
 						state
@@ -234,7 +235,6 @@ const extractBlockModules = (module, moduleGraph, runtime, blockModulesMap) => {
 };
 
 /**
- *
  * @param {Logger} logger a logger
  * @param {Compilation} compilation the compilation
  * @param {InputEntrypointsAndModules} inputEntrypointsAndModules chunk groups which are processed with the modules
@@ -286,7 +286,6 @@ const visitModules = (
 	}
 
 	/**
-	 *
 	 * @param {DependenciesBlock} block block
 	 * @param {RuntimeSpec} runtime runtime
 	 * @returns {BlockModulesInFlattenTuples} block modules in flatten tuples
@@ -316,15 +315,14 @@ const visitModules = (
 			for (const [block, blockModules] of map)
 				blockModulesMap.set(block, blockModules);
 			return map.get(block);
-		} else {
-			logger.time("visitModules: prepare");
-			extractBlockModules(module, moduleGraph, runtime, blockModulesMap);
-			blockModules =
-				/** @type {BlockModulesInFlattenTuples} */
-				(blockModulesMap.get(block));
-			logger.timeAggregate("visitModules: prepare");
-			return blockModules;
 		}
+		logger.time("visitModules: prepare");
+		extractBlockModules(module, moduleGraph, runtime, blockModulesMap);
+		blockModules =
+			/** @type {BlockModulesInFlattenTuples} */
+			(blockModulesMap.get(block));
+		logger.timeAggregate("visitModules: prepare");
+		return blockModules;
 	};
 
 	let statProcessedQueueItems = 0;
@@ -332,12 +330,12 @@ const visitModules = (
 	let statConnectedChunkGroups = 0;
 	let statProcessedChunkGroupsForMerging = 0;
 	let statMergedAvailableModuleSets = 0;
-	let statForkedAvailableModules = 0;
-	let statForkedAvailableModulesCount = 0;
-	let statForkedAvailableModulesCountPlus = 0;
-	let statForkedMergedModulesCount = 0;
-	let statForkedMergedModulesCountPlus = 0;
-	let statForkedResultModulesCount = 0;
+	const statForkedAvailableModules = 0;
+	const statForkedAvailableModulesCount = 0;
+	const statForkedAvailableModulesCountPlus = 0;
+	const statForkedMergedModulesCount = 0;
+	const statForkedMergedModulesCountPlus = 0;
+	const statForkedResultModulesCount = 0;
 	let statChunkGroupInfoUpdated = 0;
 	let statChildChunkGroupsReconnected = 0;
 
@@ -348,8 +346,8 @@ const visitModules = (
 	/** @type {Map<DependenciesBlock, ChunkGroupInfo>} */
 	const blockChunkGroups = new Map();
 
-	/** @type {Map<ChunkGroupInfo, DependenciesBlock>} */
-	const blockByChunkGroups = new Map();
+	/** @type {Map<ChunkGroupInfo, Set<DependenciesBlock>>} */
+	const blocksByChunkGroups = new Map();
 
 	/** @type {Map<string, ChunkGroupInfo>} */
 	const namedChunkGroups = new Map();
@@ -370,7 +368,7 @@ const visitModules = (
 	/** @type {QueueItem[]} */
 	let queue = [];
 
-	/** @type {Map<ChunkGroupInfo, Set<ChunkGroupInfo>>} */
+	/** @type {Map<ChunkGroupInfo, Set<[ChunkGroupInfo, QueueItem | null]>>} */
 	const queueConnect = new Map();
 	/** @type {Set<ChunkGroupInfo>} */
 	const chunkGroupsForCombining = new Set();
@@ -385,6 +383,7 @@ const visitModules = (
 		);
 		/** @type {ChunkGroupInfo} */
 		const chunkGroupInfo = {
+			initialized: false,
 			chunkGroup,
 			runtime,
 			minAvailableModules: undefined,
@@ -455,7 +454,7 @@ const visitModules = (
 
 	/** @type {Set<ChunkGroupInfo>} */
 	const outdatedChunkGroupInfo = new Set();
-	/** @type {Set<ChunkGroupInfo>} */
+	/** @type {Set<[ChunkGroupInfo, QueueItem | null]>} */
 	const chunkGroupsForMerging = new Set();
 	/** @type {QueueItem[]} */
 	let queueDelayed = [];
@@ -508,6 +507,7 @@ const visitModules = (
 					entrypoint.index = nextChunkGroupIndex++;
 					cgi = {
 						chunkGroup: entrypoint,
+						initialized: false,
 						runtime: entrypoint.options.runtime || entrypoint.name,
 						minAvailableModules: ZERO_BIGINT,
 						availableModulesToBeMerged: [],
@@ -575,6 +575,7 @@ const visitModules = (
 					maskByChunk.set(c.chunks[0], ZERO_BIGINT);
 					c.index = nextChunkGroupIndex++;
 					cgi = {
+						initialized: false,
 						chunkGroup: c,
 						runtime: chunkGroupInfo.runtime,
 						minAvailableModules: undefined,
@@ -617,7 +618,6 @@ const visitModules = (
 				blockConnections.set(b, []);
 			}
 			blockChunkGroups.set(b, /** @type {ChunkGroupInfo} */ (cgi));
-			blockByChunkGroups.set(/** @type {ChunkGroupInfo} */ (cgi), b);
 		} else if (entryOptions) {
 			entrypoint = /** @type {Entrypoint} */ (cgi.chunkGroup);
 		} else {
@@ -639,19 +639,17 @@ const visitModules = (
 				connectList = new Set();
 				queueConnect.set(chunkGroupInfo, connectList);
 			}
-			connectList.add(/** @type {ChunkGroupInfo} */ (cgi));
-
-			// TODO check if this really need to be done for each traversal
-			// or if it is enough when it's queued when created
-			// 4. We enqueue the DependenciesBlock for traversal
-			queueDelayed.push({
-				action: PROCESS_BLOCK,
-				block: b,
-				module,
-				chunk: c.chunks[0],
-				chunkGroup: c,
-				chunkGroupInfo: /** @type {ChunkGroupInfo} */ (cgi)
-			});
+			connectList.add([
+				/** @type {ChunkGroupInfo} */ (cgi),
+				{
+					action: PROCESS_BLOCK,
+					block: b,
+					module,
+					chunk: c.chunks[0],
+					chunkGroup: c,
+					chunkGroupInfo: /** @type {ChunkGroupInfo} */ (cgi)
+				}
+			]);
 		} else if (entrypoint !== undefined) {
 			chunkGroupInfo.chunkGroup.addAsyncEntrypoint(entrypoint);
 		}
@@ -904,11 +902,10 @@ const visitModules = (
 		for (const [chunkGroupInfo, targets] of queueConnect) {
 			// 1. Add new targets to the list of children
 			if (chunkGroupInfo.children === undefined) {
-				chunkGroupInfo.children = targets;
-			} else {
-				for (const target of targets) {
-					chunkGroupInfo.children.add(target);
-				}
+				chunkGroupInfo.children = new Set();
+			}
+			for (const [target] of targets) {
+				chunkGroupInfo.children.add(target);
 			}
 
 			// 2. Calculate resulting available modules
@@ -918,9 +915,9 @@ const visitModules = (
 			const runtime = chunkGroupInfo.runtime;
 
 			// 3. Update chunk group info
-			for (const target of targets) {
+			for (const [target, processBlock] of targets) {
 				target.availableModulesToBeMerged.push(resultingAvailableModules);
-				chunkGroupsForMerging.add(target);
+				chunkGroupsForMerging.add([target, processBlock]);
 				const oldRuntime = target.runtime;
 				const newRuntime = mergeRuntime(oldRuntime, runtime);
 				if (oldRuntime !== newRuntime) {
@@ -938,7 +935,7 @@ const visitModules = (
 		statProcessedChunkGroupsForMerging += chunkGroupsForMerging.size;
 
 		// Execute the merge
-		for (const info of chunkGroupsForMerging) {
+		for (const [info, processBlock] of chunkGroupsForMerging) {
 			const availableModulesToBeMerged = info.availableModulesToBeMerged;
 			const cachedMinAvailableModules = info.minAvailableModules;
 			let minAvailableModules = cachedMinAvailableModules;
@@ -960,6 +957,27 @@ const visitModules = (
 				info.minAvailableModules = minAvailableModules;
 				info.resultingAvailableModules = undefined;
 				outdatedChunkGroupInfo.add(info);
+			}
+
+			if (processBlock) {
+				let blocks = blocksByChunkGroups.get(info);
+				if (!blocks) {
+					blocksByChunkGroups.set(info, (blocks = new Set()));
+				}
+
+				// Whether to walk block depends on minAvailableModules and input block.
+				// We can treat creating chunk group as a function with 2 input, entry block and minAvailableModules
+				// If input is the same, we can skip re-walk
+				let needWalkBlock = !info.initialized || changed;
+				if (!blocks.has(processBlock.block)) {
+					needWalkBlock = true;
+					blocks.add(processBlock.block);
+				}
+
+				if (needWalkBlock) {
+					info.initialized = true;
+					queueDelayed.push(processBlock);
+				}
 			}
 		}
 		chunkGroupsForMerging.clear();
@@ -1060,7 +1078,7 @@ const visitModules = (
 						connectList = new Set();
 						queueConnect.set(info, connectList);
 					}
-					connectList.add(cgi);
+					connectList.add([cgi, null]);
 				}
 			}
 
@@ -1120,48 +1138,44 @@ const visitModules = (
 	for (const info of outdatedOrderIndexChunkGroups) {
 		const { chunkGroup, runtime } = info;
 
-		const block = blockByChunkGroups.get(info);
+		const blocks = blocksByChunkGroups.get(info);
 
-		if (!block) {
+		if (!blocks) {
 			continue;
 		}
 
-		let preOrderIndex = 0;
-		let postOrderIndex = 0;
+		for (const block of blocks) {
+			let preOrderIndex = 0;
+			let postOrderIndex = 0;
+			/**
+			 * @param {DependenciesBlock} current current
+			 * @param {BlocksWithNestedBlocks} visited visited dependencies blocks
+			 */
+			const process = (current, visited) => {
+				const blockModules = getBlockModules(current, runtime);
+				for (let i = 0, len = blockModules.length; i < len; i += 3) {
+					const activeState = /** @type {ConnectionState} */ (
+						blockModules[i + 1]
+					);
+					if (activeState === false) {
+						continue;
+					}
+					const refModule = /** @type {Module} */ (blockModules[i]);
+					if (visited.has(refModule)) {
+						continue;
+					}
 
-		/**
-		 * @param {DependenciesBlock} current current
-		 * @param {BlocksWithNestedBlocks} visited visited dependencies blocks
-		 */
-		const process = (current, visited) => {
-			const blockModules = getBlockModules(current, runtime);
-			if (blockModules === undefined) {
-				return;
-			}
+					visited.add(refModule);
 
-			for (let i = 0, len = blockModules.length; i < len; i += 3) {
-				const activeState = /** @type {ConnectionState} */ (
-					blockModules[i + 1]
-				);
-				if (activeState === false) {
-					continue;
+					if (refModule) {
+						chunkGroup.setModulePreOrderIndex(refModule, preOrderIndex++);
+						process(refModule, visited);
+						chunkGroup.setModulePostOrderIndex(refModule, postOrderIndex++);
+					}
 				}
-				const refModule = /** @type {Module} */ (blockModules[i]);
-				if (visited.has(refModule)) {
-					continue;
-				}
-
-				visited.add(refModule);
-
-				if (refModule) {
-					chunkGroup.setModulePreOrderIndex(refModule, preOrderIndex++);
-					process(refModule, visited);
-					chunkGroup.setModulePostOrderIndex(refModule, postOrderIndex++);
-				}
-			}
-		};
-
-		process(block, new Set());
+			};
+			process(block, new Set());
+		}
 	}
 	outdatedOrderIndexChunkGroups.clear();
 	ordinalByModule.clear();
@@ -1179,7 +1193,6 @@ const visitModules = (
 };
 
 /**
- *
  * @param {Compilation} compilation the compilation
  * @param {BlocksWithNestedBlocks} blocksWithNestedBlocks flag for blocks that have nested blocks
  * @param {BlockConnections} blockConnections connection for blocks
@@ -1195,7 +1208,6 @@ const connectChunkGroups = (
 
 	/**
 	 * Helper function to check if all modules of a chunk are available
-	 *
 	 * @param {ChunkGroup} chunkGroup the chunkGroup to scan
 	 * @param {bigint} availableModules the comparator set
 	 * @returns {boolean} return true if all modules of a chunk are available

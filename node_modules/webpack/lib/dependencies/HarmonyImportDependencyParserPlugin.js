@@ -6,6 +6,7 @@
 "use strict";
 
 const HotModuleReplacementPlugin = require("../HotModuleReplacementPlugin");
+const { getImportAttributes } = require("../javascript/JavascriptParser");
 const InnerGraph = require("../optimize/InnerGraph");
 const ConstDependency = require("./ConstDependency");
 const HarmonyAcceptDependency = require("./HarmonyAcceptDependency");
@@ -16,11 +17,7 @@ const { ExportPresenceModes } = require("./HarmonyImportDependency");
 const HarmonyImportSideEffectDependency = require("./HarmonyImportSideEffectDependency");
 const HarmonyImportSpecifierDependency = require("./HarmonyImportSpecifierDependency");
 
-/** @typedef {import("estree").ExportAllDeclaration} ExportAllDeclaration */
-/** @typedef {import("estree").ExportNamedDeclaration} ExportNamedDeclaration */
 /** @typedef {import("estree").Identifier} Identifier */
-/** @typedef {import("estree").ImportDeclaration} ImportDeclaration */
-/** @typedef {import("estree").ImportExpression} ImportExpression */
 /** @typedef {import("estree").Literal} Literal */
 /** @typedef {import("estree").MemberExpression} MemberExpression */
 /** @typedef {import("estree").ObjectExpression} ObjectExpression */
@@ -30,7 +27,11 @@ const HarmonyImportSpecifierDependency = require("./HarmonyImportSpecifierDepend
 /** @typedef {import("../javascript/BasicEvaluatedExpression")} BasicEvaluatedExpression */
 /** @typedef {import("../javascript/JavascriptParser")} JavascriptParser */
 /** @typedef {import("../javascript/JavascriptParser").DestructuringAssignmentProperty} DestructuringAssignmentProperty */
+/** @typedef {import("../javascript/JavascriptParser").ExportAllDeclaration} ExportAllDeclaration */
+/** @typedef {import("../javascript/JavascriptParser").ExportNamedDeclaration} ExportNamedDeclaration */
 /** @typedef {import("../javascript/JavascriptParser").ImportAttributes} ImportAttributes */
+/** @typedef {import("../javascript/JavascriptParser").ImportDeclaration} ImportDeclaration */
+/** @typedef {import("../javascript/JavascriptParser").ImportExpression} ImportExpression */
 /** @typedef {import("../javascript/JavascriptParser").Range} Range */
 /** @typedef {import("../optimize/InnerGraph").InnerGraph} InnerGraph */
 /** @typedef {import("../optimize/InnerGraph").TopLevelSymbol} TopLevelSymbol */
@@ -47,73 +48,6 @@ const harmonySpecifierTag = Symbol("harmony import");
  * @property {boolean} await
  * @property {Record<string, any> | undefined} assertions
  */
-
-/**
- * @param {ImportDeclaration | ExportNamedDeclaration | ExportAllDeclaration | (ImportExpression & { arguments?: ObjectExpression[] })} node node with assertions
- * @returns {ImportAttributes} import attributes
- */
-function getAttributes(node) {
-	if (
-		node.type === "ImportExpression" &&
-		node.arguments &&
-		node.arguments[0] &&
-		node.arguments[0].type === "ObjectExpression" &&
-		node.arguments[0].properties[0] &&
-		node.arguments[0].properties[0].type === "Property" &&
-		node.arguments[0].properties[0].value.type === "ObjectExpression" &&
-		node.arguments[0].properties[0].value.properties
-	) {
-		const properties =
-			/** @type {Property[]} */
-			(node.arguments[0].properties[0].value.properties);
-		const result = /** @type {ImportAttributes} */ ({});
-		for (const property of properties) {
-			const key =
-				/** @type {string} */
-				(
-					property.key.type === "Identifier"
-						? property.key.name
-						: /** @type {Literal} */ (property.key).value
-				);
-			result[key] =
-				/** @type {string} */
-				(/** @type {Literal} */ (property.value).value);
-		}
-		const key =
-			node.arguments[0].properties[0].key.type === "Identifier"
-				? node.arguments[0].properties[0].key.name
-				: /** @type {Literal} */ (node.arguments[0].properties[0].key).value;
-		if (key === "assert") {
-			result._isLegacyAssert = true;
-		}
-		return result;
-	}
-	// TODO remove cast when @types/estree has been updated to import assertions
-	const isImportAssertion =
-		/** @type {{ assertions?: ImportAttributeNode[] }} */ (node).assertions !==
-		undefined;
-	const attributes = isImportAssertion
-		? /** @type {{ assertions?: ImportAttributeNode[] }} */ (node).assertions
-		: /** @type {{ attributes?: ImportAttributeNode[] }} */ (node).attributes;
-	if (attributes === undefined) {
-		return undefined;
-	}
-	const result = /** @type {ImportAttributes} */ ({});
-	for (const attribute of attributes) {
-		const key =
-			/** @type {string} */
-			(
-				attribute.key.type === "Identifier"
-					? attribute.key.name
-					: attribute.key.value
-			);
-		result[key] = /** @type {string} */ (attribute.value.value);
-	}
-	if (isImportAssertion) {
-		result._isLegacyAssert = true;
-	}
-	return result;
-}
 
 module.exports = class HarmonyImportDependencyParserPlugin {
 	/**
@@ -138,12 +72,22 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 	apply(parser) {
 		const { exportPresenceMode } = this;
 
+		/**
+		 * @param {string[]} members members
+		 * @param {boolean[]} membersOptionals members Optionals
+		 * @returns {string[]} a non optional part
+		 */
 		function getNonOptionalPart(members, membersOptionals) {
 			let i = 0;
 			while (i < members.length && membersOptionals[i] === false) i++;
 			return i !== members.length ? members.slice(0, i) : members;
 		}
 
+		/**
+		 * @param {TODO} node member expression
+		 * @param {number} count count
+		 * @returns {TODO} member expression
+		 */
 		function getNonOptionalMemberChain(node, count) {
 			while (count--) node = node.object;
 			return node;
@@ -174,7 +118,7 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 				clearDep.loc = /** @type {DependencyLocation} */ (statement.loc);
 				parser.state.module.addPresentationalDependency(clearDep);
 				parser.unsetAsiPosition(/** @type {Range} */ (statement.range)[1]);
-				const attributes = getAttributes(statement);
+				const attributes = getImportAttributes(statement);
 				const sideEffectDep = new HarmonyImportSideEffectDependency(
 					/** @type {string} */ (source),
 					parser.state.lastHarmonyImportOrder,
@@ -194,7 +138,7 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 					source,
 					ids,
 					sourceOrder: parser.state.lastHarmonyImportOrder,
-					assertions: getAttributes(statement)
+					assertions: getImportAttributes(statement)
 				});
 				return true;
 			}
@@ -221,7 +165,9 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 				)
 					return;
 				const settings = rootInfo.tagInfo.data;
-				const members = rightPart.getMembers();
+				const members =
+					/** @type {(() => string[])} */
+					(rightPart.getMembers)();
 				const dep = new HarmonyEvaluatedImportSpecifierDependency(
 					settings.source,
 					settings.sourceOrder,
@@ -280,6 +226,7 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 						members,
 						membersOptionals
 					);
+					/** @type {Range[]} */
 					const ranges = memberRanges.slice(
 						0,
 						memberRanges.length - (members.length - nonOptionalMembers.length)
@@ -326,6 +273,7 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 						members,
 						membersOptionals
 					);
+					/** @type {Range[]} */
 					const ranges = memberRanges.slice(
 						0,
 						memberRanges.length - (members.length - nonOptionalMembers.length)
@@ -355,7 +303,8 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 					);
 					// only in case when we strictly follow the spec we need a special case here
 					dep.namespaceObjectAsContext =
-						members.length > 0 && this.strictThisContextOnImports;
+						members.length > 0 &&
+						/** @type {boolean} */ (this.strictThisContextOnImports);
 					dep.loc = /** @type {DependencyLocation} */ (expr.loc);
 					parser.state.module.addDependency(dep);
 					if (args) parser.walkExpressions(args);
@@ -374,17 +323,18 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 				}
 				const dependencies = requests.map(request => {
 					const dep = new HarmonyAcceptImportDependency(request);
-					dep.loc = expr.loc;
+					dep.loc = /** @type {DependencyLocation} */ (expr.loc);
 					parser.state.module.addDependency(dep);
 					return dep;
 				});
 				if (dependencies.length > 0) {
 					const dep = new HarmonyAcceptDependency(
-						expr.range,
+						/** @type {Range} */
+						(expr.range),
 						dependencies,
 						true
 					);
-					dep.loc = expr.loc;
+					dep.loc = /** @type {DependencyLocation} */ (expr.loc);
 					parser.state.module.addDependency(dep);
 				}
 			}
@@ -398,17 +348,18 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 				}
 				const dependencies = requests.map(request => {
 					const dep = new HarmonyAcceptImportDependency(request);
-					dep.loc = expr.loc;
+					dep.loc = /** @type {DependencyLocation} */ (expr.loc);
 					parser.state.module.addDependency(dep);
 					return dep;
 				});
 				if (dependencies.length > 0) {
 					const dep = new HarmonyAcceptDependency(
-						expr.range,
+						/** @type {Range} */
+						(expr.range),
 						dependencies,
 						false
 					);
-					dep.loc = expr.loc;
+					dep.loc = /** @type {DependencyLocation} */ (expr.loc);
 					parser.state.module.addDependency(dep);
 				}
 			}
@@ -417,6 +368,3 @@ module.exports = class HarmonyImportDependencyParserPlugin {
 };
 
 module.exports.harmonySpecifierTag = harmonySpecifierTag;
-// TODO remove it in webpack@6 in favor getAttributes
-module.exports.getAssertions = getAttributes;
-module.exports.getAttributes = getAttributes;

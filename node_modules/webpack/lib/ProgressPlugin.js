@@ -15,10 +15,17 @@ const { contextify } = require("./util/identifier");
 /** @typedef {import("../declarations/plugins/ProgressPlugin").HandlerFunction} HandlerFunction */
 /** @typedef {import("../declarations/plugins/ProgressPlugin").ProgressPluginArgument} ProgressPluginArgument */
 /** @typedef {import("../declarations/plugins/ProgressPlugin").ProgressPluginOptions} ProgressPluginOptions */
+/** @typedef {import("./Compilation").FactorizeModuleOptions} FactorizeModuleOptions */
 /** @typedef {import("./Dependency")} Dependency */
 /** @typedef {import("./Entrypoint").EntryOptions} EntryOptions */
 /** @typedef {import("./Module")} Module */
+/** @typedef {import("./ModuleFactory").ModuleFactoryResult} ModuleFactoryResult */
 /** @typedef {import("./logging/Logger").Logger} Logger */
+
+/**
+ * @template T, K, R
+ * @typedef {import("./util/AsyncQueue")<T, K, R>} AsyncQueue
+ */
 
 /**
  * @typedef {object} CountsData
@@ -41,9 +48,7 @@ const validate = createSchemaValidation(
  * @param {number} c c
  * @returns {number} median
  */
-const median3 = (a, b, c) => {
-	return a + b + c - Math.max(a, b, c) - Math.min(a, b, c);
-};
+const median3 = (a, b, c) => a + b + c - Math.max(a, b, c) - Math.min(a, b, c);
 
 /**
  * @param {boolean | null | undefined} profile need profile
@@ -78,11 +83,12 @@ const createDefaultHandler = (profile, logger) => {
 						if (lastStateItem.value) {
 							let reportState = lastStateItem.value;
 							if (i > 0) {
-								reportState = lastStateInfo[i - 1].value + " > " + reportState;
+								reportState = `${lastStateInfo[i - 1].value} > ${reportState}`;
 							}
 							const stateMsg = `${" | ".repeat(i)}${diff} ms ${reportState}`;
 							const d = diff;
 							// This depends on timing so we ignore it for coverage
+							/* eslint-disable no-lone-blocks */
 							/* istanbul ignore next */
 							{
 								if (d > 10000) {
@@ -97,6 +103,7 @@ const createDefaultHandler = (profile, logger) => {
 									logger.debug(stateMsg);
 								}
 							}
+							/* eslint-enable no-lone-blocks */
 						}
 						if (stateItem === undefined) {
 							lastStateInfo.length = i;
@@ -120,6 +127,8 @@ const createDefaultHandler = (profile, logger) => {
 
 	return defaultHandler;
 };
+
+const SKIPPED_QUEUE_CONTEXTS = ["import-module", "load-module"];
 
 /**
  * @callback ReportProgress
@@ -191,14 +200,14 @@ class ProgressPlugin {
 		const states = compiler.compilers.map(
 			() => /** @type {[number, ...string[]]} */ ([0])
 		);
-		compiler.compilers.forEach((compiler, idx) => {
+		for (const [idx, item] of compiler.compilers.entries()) {
 			new ProgressPlugin((p, msg, ...args) => {
 				states[idx] = [p, msg, ...args];
 				let sum = 0;
 				for (const [p] of states) sum += p;
 				handler(sum / states.length, `[${idx}] ${msg}`, ...args);
-			}).apply(compiler);
-		});
+			}).apply(item);
+		}
 	}
 
 	/**
@@ -217,7 +226,9 @@ class ProgressPlugin {
 		let lastDependenciesCount = 0;
 		let lastEntriesCount = 0;
 		let modulesCount = 0;
+		let skippedModulesCount = 0;
 		let dependenciesCount = 0;
+		let skippedDependenciesCount = 0;
 		let entriesCount = 1;
 		let doneModules = 0;
 		let doneDependencies = 0;
@@ -298,7 +309,15 @@ class ProgressPlugin {
 			lastUpdate = Date.now();
 		};
 
-		const factorizeAdd = () => {
+		/**
+		 * @template T
+		 * @param {AsyncQueue<FactorizeModuleOptions, string, Module | ModuleFactoryResult>} factorizeQueue async queue
+		 * @param {T} _item item
+		 */
+		const factorizeAdd = (factorizeQueue, _item) => {
+			if (SKIPPED_QUEUE_CONTEXTS.includes(factorizeQueue.getContext())) {
+				skippedDependenciesCount++;
+			}
 			dependenciesCount++;
 			if (dependenciesCount < 50 || dependenciesCount % 100 === 0)
 				updateThrottled();
@@ -310,7 +329,15 @@ class ProgressPlugin {
 				updateThrottled();
 		};
 
-		const moduleAdd = () => {
+		/**
+		 * @template T
+		 * @param {AsyncQueue<Module, string, Module>} addModuleQueue async queue
+		 * @param {T} _item item
+		 */
+		const moduleAdd = (addModuleQueue, _item) => {
+			if (SKIPPED_QUEUE_CONTEXTS.includes(addModuleQueue.getContext())) {
+				skippedModulesCount++;
+			}
 			modulesCount++;
 			if (modulesCount < 50 || modulesCount % 100 === 0) updateThrottled();
 		};
@@ -397,12 +424,19 @@ class ProgressPlugin {
 			if (compilation.compiler.isChild()) return Promise.resolve();
 			return /** @type {Promise<CountsData>} */ (cacheGetPromise).then(
 				async oldData => {
+					const realModulesCount = modulesCount - skippedModulesCount;
+					const realDependenciesCount =
+						dependenciesCount - skippedDependenciesCount;
+
 					if (
 						!oldData ||
-						oldData.modulesCount !== modulesCount ||
-						oldData.dependenciesCount !== dependenciesCount
+						oldData.modulesCount !== realModulesCount ||
+						oldData.dependenciesCount !== realDependenciesCount
 					) {
-						await cache.storePromise({ modulesCount, dependenciesCount });
+						await cache.storePromise({
+							modulesCount: realModulesCount,
+							dependenciesCount: realDependenciesCount
+						});
 					}
 				}
 			);
@@ -413,19 +447,25 @@ class ProgressPlugin {
 			lastModulesCount = modulesCount;
 			lastEntriesCount = entriesCount;
 			lastDependenciesCount = dependenciesCount;
-			modulesCount = dependenciesCount = entriesCount = 0;
+			modulesCount =
+				skippedModulesCount =
+				dependenciesCount =
+				skippedDependenciesCount =
+				entriesCount =
+					0;
 			doneModules = doneDependencies = doneEntries = 0;
 
-			compilation.factorizeQueue.hooks.added.tap(
-				"ProgressPlugin",
-				factorizeAdd
+			compilation.factorizeQueue.hooks.added.tap("ProgressPlugin", item =>
+				factorizeAdd(compilation.factorizeQueue, item)
 			);
 			compilation.factorizeQueue.hooks.result.tap(
 				"ProgressPlugin",
 				factorizeDone
 			);
 
-			compilation.addModuleQueue.hooks.added.tap("ProgressPlugin", moduleAdd);
+			compilation.addModuleQueue.hooks.added.tap("ProgressPlugin", item =>
+				moduleAdd(compilation.addModuleQueue, item)
+			);
 			compilation.processDependenciesQueue.hooks.result.tap(
 				"ProgressPlugin",
 				moduleDone
@@ -507,7 +547,7 @@ class ProgressPlugin {
 				afterSeal: "after seal"
 			};
 			const numberOfHooks = Object.keys(hooks).length;
-			Object.keys(hooks).forEach((name, idx) => {
+			for (const [idx, name] of Object.keys(hooks).entries()) {
 				const title = hooks[/** @type {keyof typeof hooks} */ (name)];
 				const percentage = (idx / numberOfHooks) * 0.25 + 0.7;
 				compilation.hooks[/** @type {keyof typeof hooks} */ (name)].intercept({
@@ -534,7 +574,7 @@ class ProgressPlugin {
 						handler(percentage, "sealing", title, tap.name);
 					}
 				});
-			});
+			}
 		});
 		compiler.hooks.make.intercept({
 			name: "ProgressPlugin",

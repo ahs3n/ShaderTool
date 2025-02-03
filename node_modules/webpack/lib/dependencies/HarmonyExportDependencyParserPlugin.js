@@ -5,6 +5,7 @@
 
 "use strict";
 
+const { getImportAttributes } = require("../javascript/JavascriptParser");
 const InnerGraph = require("../optimize/InnerGraph");
 const ConstDependency = require("./ConstDependency");
 const HarmonyExportExpressionDependency = require("./HarmonyExportExpressionDependency");
@@ -13,8 +14,7 @@ const HarmonyExportImportedSpecifierDependency = require("./HarmonyExportImporte
 const HarmonyExportSpecifierDependency = require("./HarmonyExportSpecifierDependency");
 const { ExportPresenceModes } = require("./HarmonyImportDependency");
 const {
-	harmonySpecifierTag,
-	getAttributes
+	harmonySpecifierTag
 } = require("./HarmonyImportDependencyParserPlugin");
 const HarmonyImportSideEffectDependency = require("./HarmonyImportSideEffectDependency");
 
@@ -78,7 +78,7 @@ module.exports = class HarmonyExportDependencyParserPlugin {
 				const sideEffectDep = new HarmonyImportSideEffectDependency(
 					/** @type {string} */ (source),
 					parser.state.lastHarmonyImportOrder,
-					getAttributes(statement)
+					getImportAttributes(statement)
 				);
 				sideEffectDep.loc = Object.create(
 					/** @type {DependencyLocation} */ (statement.loc)
@@ -145,30 +145,34 @@ module.exports = class HarmonyExportDependencyParserPlugin {
 			"HarmonyExportDependencyParserPlugin",
 			(statement, id, name, idx) => {
 				const settings = parser.getTagData(id, harmonySpecifierTag);
-				let dep;
 				const harmonyNamedExports = (parser.state.harmonyNamedExports =
 					parser.state.harmonyNamedExports || new Set());
 				harmonyNamedExports.add(name);
 				InnerGraph.addVariableUsage(parser, id, name);
-				if (settings) {
-					dep = new HarmonyExportImportedSpecifierDependency(
-						settings.source,
-						settings.sourceOrder,
-						settings.ids,
-						name,
-						harmonyNamedExports,
-						null,
-						exportPresenceMode,
-						null,
-						settings.assertions
-					);
-				} else {
-					dep = new HarmonyExportSpecifierDependency(id, name);
-				}
+				const dep = settings
+					? new HarmonyExportImportedSpecifierDependency(
+							settings.source,
+							settings.sourceOrder,
+							settings.ids,
+							name,
+							harmonyNamedExports,
+							null,
+							exportPresenceMode,
+							null,
+							settings.assertions
+						)
+					: new HarmonyExportSpecifierDependency(id, name);
 				dep.loc = Object.create(
 					/** @type {DependencyLocation} */ (statement.loc)
 				);
 				dep.loc.index = idx;
+				const isAsiSafe = !parser.isAsiPosition(
+					/** @type {Range} */
+					(statement.range)[0]
+				);
+				if (!isAsiSafe) {
+					parser.setAsiPosition(/** @type {Range} */ (statement.range)[1]);
+				}
 				parser.state.current.addDependency(dep);
 				return true;
 			}
@@ -202,6 +206,13 @@ module.exports = class HarmonyExportDependencyParserPlugin {
 					/** @type {DependencyLocation} */ (statement.loc)
 				);
 				dep.loc.index = idx;
+				const isAsiSafe = !parser.isAsiPosition(
+					/** @type {Range} */
+					(statement.range)[0]
+				);
+				if (!isAsiSafe) {
+					parser.setAsiPosition(/** @type {Range} */ (statement.range)[1]);
+				}
 				parser.state.current.addDependency(dep);
 				return true;
 			}

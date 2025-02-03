@@ -65,11 +65,7 @@ const extractCommithashByDomain = {
 			return;
 		}
 
-		if (!type) {
-			commithash = hash;
-		} else {
-			commithash = "#" + commithash;
-		}
+		commithash = !type ? hash : `#${commithash}`;
 
 		if (project && project.endsWith(".git")) {
 			project = project.slice(0, -4);
@@ -155,7 +151,6 @@ const extractCommithashByDomain = {
 
 /**
  * extract commit hash from parsed url
- *
  * @inner
  * @param {URL} urlParsed parsed url
  * @returns {string} commithash
@@ -167,7 +162,7 @@ function getCommithash(urlParsed) {
 	try {
 		hash = decodeURIComponent(hash);
 		// eslint-disable-next-line no-empty
-	} catch (e) {}
+	} catch (_err) {}
 
 	if (
 		extractCommithashByDomain[
@@ -186,7 +181,6 @@ function getCommithash(urlParsed) {
 
 /**
  * make url right for URL parse
- *
  * @inner
  * @param {string} gitUrl git url
  * @returns {string} fixed url
@@ -199,7 +193,6 @@ function correctUrl(gitUrl) {
 
 /**
  * make url protocol right for URL parse
- *
  * @inner
  * @param {string} gitUrl git url
  * @returns {string} fixed url
@@ -220,7 +213,6 @@ function correctProtocol(gitUrl) {
 
 /**
  * extract git dep version from hash
- *
  * @inner
  * @param {string} hash hash
  * @returns {string} git dep version
@@ -233,7 +225,6 @@ function getVersionFromHash(hash) {
 
 /**
  * if string can be decoded
- *
  * @inner
  * @param {string} str str to be checked
  * @returns {boolean} if can be decoded
@@ -241,7 +232,7 @@ function getVersionFromHash(hash) {
 function canBeDecoded(str) {
 	try {
 		decodeURIComponent(str);
-	} catch (e) {
+	} catch (_err) {
 		return false;
 	}
 
@@ -250,19 +241,16 @@ function canBeDecoded(str) {
 
 /**
  * get right dep version from git url
- *
  * @inner
  * @param {string} gitUrl git url
  * @returns {string} dep version
  */
 function getGitUrlVersion(gitUrl) {
-	let oriGitUrl = gitUrl;
+	const oriGitUrl = gitUrl;
 	// github extreme shorthand
-	if (RE_URL_GITHUB_EXTREME_SHORT.test(gitUrl)) {
-		gitUrl = "github:" + gitUrl;
-	} else {
-		gitUrl = correctProtocol(gitUrl);
-	}
+	gitUrl = RE_URL_GITHUB_EXTREME_SHORT.test(gitUrl)
+		? `github:${gitUrl}`
+		: correctProtocol(gitUrl);
 
 	gitUrl = correctUrl(gitUrl);
 
@@ -270,7 +258,7 @@ function getGitUrlVersion(gitUrl) {
 	try {
 		parsed = new URL(gitUrl);
 		// eslint-disable-next-line no-empty
-	} catch (e) {}
+	} catch (_err) {}
 
 	if (!parsed) {
 		return "";
@@ -312,7 +300,7 @@ function isRequiredVersion(str) {
 	return VERSION_PATTERN_REGEXP.test(str);
 }
 
-exports.isRequiredVersion = isRequiredVersion;
+module.exports.isRequiredVersion = isRequiredVersion;
 
 /**
  * @see https://docs.npmjs.com/cli/v7/configuring-npm/package-json#urls-as-dependencies
@@ -330,26 +318,50 @@ function normalizeVersion(versionDesc) {
 	return getGitUrlVersion(versionDesc.toLowerCase());
 }
 
-exports.normalizeVersion = normalizeVersion;
+module.exports.normalizeVersion = normalizeVersion;
+
+/** @typedef {{ data: JsonObject, path: string }} DescriptionFile */
 
 /**
- *
  * @param {InputFileSystem} fs file system
  * @param {string} directory directory to start looking into
  * @param {string[]} descriptionFiles possible description filenames
- * @param {function((Error | null)=, {data: object, path: string}=): void} callback callback
+ * @param {function((Error | null)=, DescriptionFile=, string[]=): void} callback callback
+ * @param {function(DescriptionFile=): boolean} satisfiesDescriptionFileData file data compliance check
+ * @param {Set<string>} checkedFilePaths set of file paths that have been checked
  */
-const getDescriptionFile = (fs, directory, descriptionFiles, callback) => {
+const getDescriptionFile = (
+	fs,
+	directory,
+	descriptionFiles,
+	callback,
+	satisfiesDescriptionFileData,
+	checkedFilePaths = new Set()
+) => {
 	let i = 0;
+
+	const satisfiesDescriptionFileDataInternal = {
+		check: satisfiesDescriptionFileData,
+		checkedFilePaths
+	};
+
 	const tryLoadCurrent = () => {
 		if (i >= descriptionFiles.length) {
 			const parentDirectory = dirname(fs, directory);
-			if (!parentDirectory || parentDirectory === directory) return callback();
+			if (!parentDirectory || parentDirectory === directory) {
+				return callback(
+					null,
+					undefined,
+					Array.from(satisfiesDescriptionFileDataInternal.checkedFilePaths)
+				);
+			}
 			return getDescriptionFile(
 				fs,
 				parentDirectory,
 				descriptionFiles,
-				callback
+				callback,
+				satisfiesDescriptionFileDataInternal.check,
+				satisfiesDescriptionFileDataInternal.checkedFilePaths
 			);
 		}
 		const filePath = join(fs, directory, descriptionFiles[i]);
@@ -366,15 +378,22 @@ const getDescriptionFile = (fs, directory, descriptionFiles, callback) => {
 					new Error(`Description file ${filePath} is not an object`)
 				);
 			}
+			if (
+				typeof satisfiesDescriptionFileDataInternal.check === "function" &&
+				!satisfiesDescriptionFileDataInternal.check({ data, path: filePath })
+			) {
+				i++;
+				satisfiesDescriptionFileDataInternal.checkedFilePaths.add(filePath);
+				return tryLoadCurrent();
+			}
 			callback(null, { data, path: filePath });
 		});
 	};
 	tryLoadCurrent();
 };
-exports.getDescriptionFile = getDescriptionFile;
+module.exports.getDescriptionFile = getDescriptionFile;
 
 /**
- *
  * @param {JsonObject} data description file data i.e.: package.json
  * @param {string} packageName name of the dependency
  * @returns {string | undefined} normalized version
@@ -402,5 +421,5 @@ const getRequiredVersionFromDescriptionFile = (data, packageName) => {
 		}
 	}
 };
-exports.getRequiredVersionFromDescriptionFile =
+module.exports.getRequiredVersionFromDescriptionFile =
 	getRequiredVersionFromDescriptionFile;

@@ -26,6 +26,7 @@ const ModuleDecoratorDependency = require("./ModuleDecoratorDependency");
 /** @typedef {import("../javascript/BasicEvaluatedExpression")} BasicEvaluatedExpression */
 /** @typedef {import("../javascript/JavascriptParser")} JavascriptParser */
 /** @typedef {import("../javascript/JavascriptParser").Range} Range */
+/** @typedef {import("../javascript/JavascriptParser").StatementPath} StatementPath */
 /** @typedef {import("./CommonJsDependencyHelpers").CommonJSDependencyBaseKeywords} CommonJSDependencyBaseKeywords */
 
 /**
@@ -43,7 +44,6 @@ const ModuleDecoratorDependency = require("./ModuleDecoratorDependency");
  * exports.foo = void 0;
  * exports.foo = "bar";
  * ```
- *
  * @param {TODO} expr expression
  * @returns {Expression | undefined} returns the value of property descriptor
  */
@@ -61,15 +61,13 @@ const getValueOfPropertyDescription = expr => {
  * The purpose of this function is to check whether an expression is a truthy literal or not. This is
  * useful when parsing CommonJS exports, because CommonJS modules can export any value, including falsy
  * values like `null` and `false`. However, exports should only be created if the exported value is truthy.
- *
  * @param {Expression} expr expression being checked
  * @returns {boolean} true, when the expression is a truthy literal
- *
  */
 const isTruthyLiteral = expr => {
 	switch (expr.type) {
 		case "Literal":
-			return !!expr.value;
+			return Boolean(expr.value);
 		case "UnaryExpression":
 			if (expr.operator === "!") return isFalsyLiteral(expr.argument);
 	}
@@ -80,7 +78,6 @@ const isTruthyLiteral = expr => {
  * The purpose of this function is to check whether an expression is a falsy literal or not. This is
  * useful when parsing CommonJS exports, because CommonJS modules can export any value, including falsy
  * values like `null` and `false`. However, exports should only be created if the exported value is truthy.
- *
  * @param {Expression} expr expression being checked
  * @returns {boolean} true, when the expression is a falsy literal
  */
@@ -215,7 +212,7 @@ class CommonJsExportsParserPlugin {
 					!parser.isStatementLevelExpression(expr)
 				);
 				dep.loc = /** @type {DependencyLocation} */ (expr.loc);
-				dep.optional = !!parser.scope.inTry;
+				dep.optional = Boolean(parser.scope.inTry);
 				parser.state.module.addDependency(dep);
 				return true;
 			}
@@ -223,7 +220,8 @@ class CommonJsExportsParserPlugin {
 			enableStructuredExports();
 			const remainingMembers = members;
 			checkNamespace(
-				parser.statementPath.length === 1 &&
+				/** @type {StatementPath} */
+				(parser.statementPath).length === 1 &&
 					parser.isStatementLevelExpression(expr),
 				remainingMembers,
 				expr.right
@@ -241,9 +239,9 @@ class CommonJsExportsParserPlugin {
 		};
 		parser.hooks.assignMemberChain
 			.for("exports")
-			.tap("CommonJsExportsParserPlugin", (expr, members) => {
-				return handleAssignExport(expr, "exports", members);
-			});
+			.tap("CommonJsExportsParserPlugin", (expr, members) =>
+				handleAssignExport(expr, "exports", members)
+			);
 		parser.hooks.assignMemberChain
 			.for("this")
 			.tap("CommonJsExportsParserPlugin", (expr, members) => {
@@ -280,7 +278,8 @@ class CommonJsExportsParserPlugin {
 				enableStructuredExports();
 				const descArg = expr.arguments[2];
 				checkNamespace(
-					parser.statementPath.length === 1,
+					/** @type {StatementPath} */
+					(parser.statementPath).length === 1,
 					[property],
 					getValueOfPropertyDescription(descArg)
 				);
@@ -306,7 +305,7 @@ class CommonJsExportsParserPlugin {
 		 * @param {CallExpression=} call call expression
 		 * @returns {boolean | void} true, when the expression was handled
 		 */
-		const handleAccessExport = (expr, base, members, call = undefined) => {
+		const handleAccessExport = (expr, base, members, call) => {
 			if (HarmonyExports.isEnabled(parser.state)) return;
 			if (members.length === 0) {
 				bailout(
@@ -328,7 +327,7 @@ class CommonJsExportsParserPlugin {
 				/** @type {Range} */ (expr.range),
 				base,
 				members,
-				!!call
+				Boolean(call)
 			);
 			dep.loc = /** @type {DependencyLocation} */ (expr.loc);
 			parser.state.module.addDependency(dep);
@@ -339,19 +338,19 @@ class CommonJsExportsParserPlugin {
 		};
 		parser.hooks.callMemberChain
 			.for("exports")
-			.tap("CommonJsExportsParserPlugin", (expr, members) => {
-				return handleAccessExport(expr.callee, "exports", members, expr);
-			});
+			.tap("CommonJsExportsParserPlugin", (expr, members) =>
+				handleAccessExport(expr.callee, "exports", members, expr)
+			);
 		parser.hooks.expressionMemberChain
 			.for("exports")
-			.tap("CommonJsExportsParserPlugin", (expr, members) => {
-				return handleAccessExport(expr, "exports", members);
-			});
+			.tap("CommonJsExportsParserPlugin", (expr, members) =>
+				handleAccessExport(expr, "exports", members)
+			);
 		parser.hooks.expression
 			.for("exports")
-			.tap("CommonJsExportsParserPlugin", expr => {
-				return handleAccessExport(expr, "exports", []);
-			});
+			.tap("CommonJsExportsParserPlugin", expr =>
+				handleAccessExport(expr, "exports", [])
+			);
 		parser.hooks.callMemberChain
 			.for("module")
 			.tap("CommonJsExportsParserPlugin", (expr, members) => {
@@ -371,9 +370,9 @@ class CommonJsExportsParserPlugin {
 			});
 		parser.hooks.expression
 			.for("module.exports")
-			.tap("CommonJsExportsParserPlugin", expr => {
-				return handleAccessExport(expr, "module.exports", []);
-			});
+			.tap("CommonJsExportsParserPlugin", expr =>
+				handleAccessExport(expr, "module.exports", [])
+			);
 		parser.hooks.callMemberChain
 			.for("this")
 			.tap("CommonJsExportsParserPlugin", (expr, members) => {

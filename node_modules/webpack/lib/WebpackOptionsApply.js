@@ -56,6 +56,8 @@ const DefaultStatsPrinterPlugin = require("./stats/DefaultStatsPrinterPlugin");
 const { cleverMerge } = require("./util/cleverMerge");
 
 /** @typedef {import("../declarations/WebpackOptions").WebpackOptionsNormalized} WebpackOptions */
+/** @typedef {import("../declarations/WebpackOptions").WebpackPluginFunction} WebpackPluginFunction */
+/** @typedef {import("../declarations/WebpackOptions").WebpackPluginInstance} WebpackPluginInstance */
 /** @typedef {import("./Compiler")} Compiler */
 /** @typedef {import("./util/fs").InputFileSystem} InputFileSystem */
 /** @typedef {import("./util/fs").IntermediateFileSystem} IntermediateFileSystem */
@@ -71,13 +73,13 @@ class WebpackOptionsApply extends OptionsApply {
 	 * @returns {WebpackOptions} options object
 	 */
 	process(options, compiler) {
-		compiler.outputPath = options.output.path;
+		compiler.outputPath = /** @type {string} */ (options.output.path);
 		compiler.recordsInputPath = options.recordsInputPath || null;
 		compiler.recordsOutputPath = options.recordsOutputPath || null;
 		compiler.name = options.name;
 
 		if (options.externals) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ExternalsPlugin = require("./ExternalsPlugin");
 			new ExternalsPlugin(options.externalsType, options.externals).apply(
 				compiler
@@ -89,17 +91,17 @@ class WebpackOptionsApply extends OptionsApply {
 			new NodeTargetPlugin().apply(compiler);
 		}
 		if (options.externalsPresets.electronMain) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ElectronTargetPlugin = require("./electron/ElectronTargetPlugin");
 			new ElectronTargetPlugin("main").apply(compiler);
 		}
 		if (options.externalsPresets.electronPreload) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ElectronTargetPlugin = require("./electron/ElectronTargetPlugin");
 			new ElectronTargetPlugin("preload").apply(compiler);
 		}
 		if (options.externalsPresets.electronRenderer) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ElectronTargetPlugin = require("./electron/ElectronTargetPlugin");
 			new ElectronTargetPlugin("renderer").apply(compiler);
 		}
@@ -109,74 +111,76 @@ class WebpackOptionsApply extends OptionsApply {
 			!options.externalsPresets.electronPreload &&
 			!options.externalsPresets.electronRenderer
 		) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ElectronTargetPlugin = require("./electron/ElectronTargetPlugin");
 			new ElectronTargetPlugin().apply(compiler);
 		}
 		if (options.externalsPresets.nwjs) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ExternalsPlugin = require("./ExternalsPlugin");
 			new ExternalsPlugin("node-commonjs", "nw.gui").apply(compiler);
 		}
 		if (options.externalsPresets.webAsync) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ExternalsPlugin = require("./ExternalsPlugin");
 			new ExternalsPlugin("import", ({ request, dependencyType }, callback) => {
 				if (dependencyType === "url") {
-					if (/^(\/\/|https?:\/\/|#)/.test(request))
+					if (/^(\/\/|https?:\/\/|#)/.test(/** @type {string} */ (request)))
 						return callback(null, `asset ${request}`);
 				} else if (options.experiments.css && dependencyType === "css-import") {
-					if (/^(\/\/|https?:\/\/|#)/.test(request))
+					if (/^(\/\/|https?:\/\/|#)/.test(/** @type {string} */ (request)))
 						return callback(null, `css-import ${request}`);
 				} else if (
 					options.experiments.css &&
-					/^(\/\/|https?:\/\/|std:)/.test(request)
+					/^(\/\/|https?:\/\/|std:)/.test(/** @type {string} */ (request))
 				) {
-					if (/^\.css(\?|$)/.test(request))
+					if (/^\.css(\?|$)/.test(/** @type {string} */ (request)))
 						return callback(null, `css-import ${request}`);
 					return callback(null, `import ${request}`);
 				}
 				callback();
 			}).apply(compiler);
 		} else if (options.externalsPresets.web) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ExternalsPlugin = require("./ExternalsPlugin");
 			new ExternalsPlugin("module", ({ request, dependencyType }, callback) => {
 				if (dependencyType === "url") {
-					if (/^(\/\/|https?:\/\/|#)/.test(request))
+					if (/^(\/\/|https?:\/\/|#)/.test(/** @type {string} */ (request)))
 						return callback(null, `asset ${request}`);
 				} else if (options.experiments.css && dependencyType === "css-import") {
-					if (/^(\/\/|https?:\/\/|#)/.test(request))
+					if (/^(\/\/|https?:\/\/|#)/.test(/** @type {string} */ (request)))
 						return callback(null, `css-import ${request}`);
-				} else if (/^(\/\/|https?:\/\/|std:)/.test(request)) {
-					if (options.experiments.css && /^\.css((\?)|$)/.test(request))
+				} else if (
+					/^(\/\/|https?:\/\/|std:)/.test(/** @type {string} */ (request))
+				) {
+					if (
+						options.experiments.css &&
+						/^\.css((\?)|$)/.test(/** @type {string} */ (request))
+					)
 						return callback(null, `css-import ${request}`);
 					return callback(null, `module ${request}`);
 				}
 				callback();
 			}).apply(compiler);
-		} else if (options.externalsPresets.node) {
-			if (options.experiments.css) {
-				//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
-				const ExternalsPlugin = require("./ExternalsPlugin");
-				new ExternalsPlugin(
-					"module",
-					({ request, dependencyType }, callback) => {
-						if (dependencyType === "url") {
-							if (/^(\/\/|https?:\/\/|#)/.test(request))
-								return callback(null, `asset ${request}`);
-						} else if (dependencyType === "css-import") {
-							if (/^(\/\/|https?:\/\/|#)/.test(request))
-								return callback(null, `css-import ${request}`);
-						} else if (/^(\/\/|https?:\/\/|std:)/.test(request)) {
-							if (/^\.css(\?|$)/.test(request))
-								return callback(null, `css-import ${request}`);
-							return callback(null, `module ${request}`);
-						}
-						callback();
-					}
-				).apply(compiler);
-			}
+		} else if (options.externalsPresets.node && options.experiments.css) {
+			// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			const ExternalsPlugin = require("./ExternalsPlugin");
+			new ExternalsPlugin("module", ({ request, dependencyType }, callback) => {
+				if (dependencyType === "url") {
+					if (/^(\/\/|https?:\/\/|#)/.test(/** @type {string} */ (request)))
+						return callback(null, `asset ${request}`);
+				} else if (dependencyType === "css-import") {
+					if (/^(\/\/|https?:\/\/|#)/.test(/** @type {string} */ (request)))
+						return callback(null, `css-import ${request}`);
+				} else if (
+					/^(\/\/|https?:\/\/|std:)/.test(/** @type {string} */ (request))
+				) {
+					if (/^\.css(\?|$)/.test(/** @type {string} */ (request)))
+						return callback(null, `css-import ${request}`);
+					return callback(null, `module ${request}`);
+				}
+				callback();
+			}).apply(compiler);
 		}
 
 		new ChunkPrefetchPreloadPlugin().apply(compiler);
@@ -200,27 +204,39 @@ class WebpackOptionsApply extends OptionsApply {
 				}
 				default:
 					throw new Error(
-						"Unsupported chunk format '" + options.output.chunkFormat + "'."
+						`Unsupported chunk format '${options.output.chunkFormat}'.`
 					);
 			}
 		}
 
-		if (options.output.enabledChunkLoadingTypes.length > 0) {
-			for (const type of options.output.enabledChunkLoadingTypes) {
+		const enabledChunkLoadingTypes =
+			/** @type {NonNullable<WebpackOptions["output"]["enabledChunkLoadingTypes"]>} */
+			(options.output.enabledChunkLoadingTypes);
+
+		if (enabledChunkLoadingTypes.length > 0) {
+			for (const type of enabledChunkLoadingTypes) {
 				const EnableChunkLoadingPlugin = require("./javascript/EnableChunkLoadingPlugin");
 				new EnableChunkLoadingPlugin(type).apply(compiler);
 			}
 		}
 
-		if (options.output.enabledWasmLoadingTypes.length > 0) {
-			for (const type of options.output.enabledWasmLoadingTypes) {
+		const enabledWasmLoadingTypes =
+			/** @type {NonNullable<WebpackOptions["output"]["enabledWasmLoadingTypes"]>} */
+			(options.output.enabledWasmLoadingTypes);
+
+		if (enabledWasmLoadingTypes.length > 0) {
+			for (const type of enabledWasmLoadingTypes) {
 				const EnableWasmLoadingPlugin = require("./wasm/EnableWasmLoadingPlugin");
 				new EnableWasmLoadingPlugin(type).apply(compiler);
 			}
 		}
 
-		if (options.output.enabledLibraryTypes.length > 0) {
-			for (const type of options.output.enabledLibraryTypes) {
+		const enabledLibraryTypes =
+			/** @type {NonNullable<WebpackOptions["output"]["enabledLibraryTypes"]>} */
+			(options.output.enabledLibraryTypes);
+
+		if (enabledLibraryTypes.length > 0) {
+			for (const type of enabledLibraryTypes) {
 				const EnableLibraryPlugin = require("./library/EnableLibraryPlugin");
 				new EnableLibraryPlugin(type).apply(compiler);
 			}
@@ -248,6 +264,7 @@ class WebpackOptionsApply extends OptionsApply {
 				const cheap = options.devtool.includes("cheap");
 				const moduleMaps = options.devtool.includes("module");
 				const noSources = options.devtool.includes("nosources");
+				const debugIds = options.devtool.includes("debugids");
 				const Plugin = evalWrapped
 					? require("./EvalSourceMapDevToolPlugin")
 					: require("./SourceMapDevToolPlugin");
@@ -257,10 +274,11 @@ class WebpackOptionsApply extends OptionsApply {
 					fallbackModuleFilenameTemplate:
 						options.output.devtoolFallbackModuleFilenameTemplate,
 					append: hidden ? false : undefined,
-					module: moduleMaps ? true : cheap ? false : true,
-					columns: cheap ? false : true,
-					noSources: noSources,
-					namespace: options.output.devtoolNamespace
+					module: moduleMaps ? true : !cheap,
+					columns: !cheap,
+					noSources,
+					namespace: options.output.devtoolNamespace,
+					debugIds
 				}).apply(compiler);
 			} else if (options.devtool.includes("eval")) {
 				const EvalDevToolModulePlugin = require("./EvalDevToolModulePlugin");
@@ -291,7 +309,10 @@ class WebpackOptionsApply extends OptionsApply {
 					"library type \"modern-module\" is only allowed when 'experiments.outputModule' is enabled"
 				);
 			}
-			if (options.externalsType === "module") {
+			if (
+				options.externalsType === "module" ||
+				options.externalsType === "module-import"
+			) {
 				throw new Error(
 					"'externalsType: \"module\"' is only allowed when 'experiments.outputModule' is enabled"
 				);
@@ -322,7 +343,7 @@ class WebpackOptionsApply extends OptionsApply {
 			const lazyOptions =
 				typeof options.experiments.lazyCompilation === "object"
 					? options.experiments.lazyCompilation
-					: null;
+					: {};
 			new LazyCompilationPlugin({
 				backend:
 					typeof lazyOptions.backend === "function"
@@ -350,7 +371,11 @@ class WebpackOptionsApply extends OptionsApply {
 		}
 
 		new EntryOptionPlugin().apply(compiler);
-		compiler.hooks.entryOption.call(options.context, options.entry);
+		compiler.hooks.entryOption.call(
+			/** @type {string} */
+			(options.context),
+			options.entry
+		);
 
 		new RuntimePlugin().apply(compiler);
 
@@ -474,8 +499,12 @@ class WebpackOptionsApply extends OptionsApply {
 		if (options.optimization.realContentHash) {
 			const RealContentHashPlugin = require("./optimize/RealContentHashPlugin");
 			new RealContentHashPlugin({
-				hashFunction: options.output.hashFunction,
-				hashDigest: options.output.hashDigest
+				hashFunction:
+					/** @type {NonNullable<WebpackOptions["output"]["hashFunction"]>} */
+					(options.output.hashFunction),
+				hashDigest:
+					/** @type {NonNullable<WebpackOptions["output"]["hashDigest"]>} */
+					(options.output.hashDigest)
 			}).apply(compiler);
 		}
 		if (options.optimization.checkWasmTypes) {
@@ -545,7 +574,7 @@ class WebpackOptionsApply extends OptionsApply {
 					break;
 				}
 				case "size": {
-					//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+					// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 					const OccurrenceChunkIdsPlugin = require("./ids/OccurrenceChunkIdsPlugin");
 					new OccurrenceChunkIdsPlugin({
 						prioritiseInitial: true
@@ -553,7 +582,7 @@ class WebpackOptionsApply extends OptionsApply {
 					break;
 				}
 				case "total-size": {
-					//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+					// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 					const OccurrenceChunkIdsPlugin = require("./ids/OccurrenceChunkIdsPlugin");
 					new OccurrenceChunkIdsPlugin({
 						prioritiseInitial: false
@@ -573,9 +602,12 @@ class WebpackOptionsApply extends OptionsApply {
 			}).apply(compiler);
 		}
 		if (options.optimization.minimize) {
-			for (const minimizer of options.optimization.minimizer) {
+			for (const minimizer of /** @type {(WebpackPluginInstance | WebpackPluginFunction | "...")[]} */ (
+				options.optimization.minimizer
+			)) {
 				if (typeof minimizer === "function") {
-					minimizer.call(compiler, compiler);
+					/** @type {WebpackPluginFunction} */
+					(minimizer).call(compiler, compiler);
 				} else if (minimizer !== "..." && minimizer) {
 					minimizer.apply(compiler);
 				}
@@ -597,23 +629,28 @@ class WebpackOptionsApply extends OptionsApply {
 
 		const AddManagedPathsPlugin = require("./cache/AddManagedPathsPlugin");
 		new AddManagedPathsPlugin(
-			options.snapshot.managedPaths,
-			options.snapshot.immutablePaths,
-			options.snapshot.unmanagedPaths
+			/** @type {NonNullable<WebpackOptions["snapshot"]["managedPaths"]>} */
+			(options.snapshot.managedPaths),
+			/** @type {NonNullable<WebpackOptions["snapshot"]["managedPaths"]>} */
+			(options.snapshot.immutablePaths),
+			/** @type {NonNullable<WebpackOptions["snapshot"]["managedPaths"]>} */
+			(options.snapshot.unmanagedPaths)
 		).apply(compiler);
 
 		if (options.cache && typeof options.cache === "object") {
 			const cacheOptions = options.cache;
 			switch (cacheOptions.type) {
 				case "memory": {
-					if (isFinite(cacheOptions.maxGenerations)) {
-						//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+					if (Number.isFinite(cacheOptions.maxGenerations)) {
+						// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 						const MemoryWithGcCachePlugin = require("./cache/MemoryWithGcCachePlugin");
 						new MemoryWithGcCachePlugin({
-							maxGenerations: cacheOptions.maxGenerations
+							maxGenerations:
+								/** @type {number} */
+								(cacheOptions.maxGenerations)
 						}).apply(compiler);
 					} else {
-						//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+						// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 						const MemoryCachePlugin = require("./cache/MemoryCachePlugin");
 						new MemoryCachePlugin().apply(compiler);
 					}
@@ -629,19 +666,22 @@ class WebpackOptionsApply extends OptionsApply {
 				}
 				case "filesystem": {
 					const AddBuildDependenciesPlugin = require("./cache/AddBuildDependenciesPlugin");
+					// eslint-disable-next-line guard-for-in
 					for (const key in cacheOptions.buildDependencies) {
 						const list = cacheOptions.buildDependencies[key];
 						new AddBuildDependenciesPlugin(list).apply(compiler);
 					}
-					if (!isFinite(cacheOptions.maxMemoryGenerations)) {
-						//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+					if (!Number.isFinite(cacheOptions.maxMemoryGenerations)) {
+						// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 						const MemoryCachePlugin = require("./cache/MemoryCachePlugin");
 						new MemoryCachePlugin().apply(compiler);
 					} else if (cacheOptions.maxMemoryGenerations !== 0) {
-						//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+						// @ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 						const MemoryWithGcCachePlugin = require("./cache/MemoryWithGcCachePlugin");
 						new MemoryWithGcCachePlugin({
-							maxGenerations: cacheOptions.maxMemoryGenerations
+							maxGenerations:
+								/** @type {number} */
+								(cacheOptions.maxMemoryGenerations)
 						}).apply(compiler);
 					}
 					if (cacheOptions.memoryCacheUnaffected) {
@@ -659,25 +699,30 @@ class WebpackOptionsApply extends OptionsApply {
 							new IdleFileCachePlugin(
 								new PackFileCacheStrategy({
 									compiler,
-									fs: /** @type {IntermediateFileSystem} */ (
-										compiler.intermediateFileSystem
-									),
-									context: options.context,
-									cacheLocation: cacheOptions.cacheLocation,
-									version: cacheOptions.version,
+									fs:
+										/** @type {IntermediateFileSystem} */
+										(compiler.intermediateFileSystem),
+									context: /** @type {string} */ (options.context),
+									cacheLocation:
+										/** @type {string} */
+										(cacheOptions.cacheLocation),
+									version: /** @type {string} */ (cacheOptions.version),
 									logger: compiler.getInfrastructureLogger(
 										"webpack.cache.PackFileCacheStrategy"
 									),
 									snapshot: options.snapshot,
-									maxAge: cacheOptions.maxAge,
+									maxAge: /** @type {number} */ (cacheOptions.maxAge),
 									profile: cacheOptions.profile,
 									allowCollectingMemory: cacheOptions.allowCollectingMemory,
 									compression: cacheOptions.compression,
 									readonly: cacheOptions.readonly
 								}),
-								cacheOptions.idleTimeout,
-								cacheOptions.idleTimeoutForInitialStore,
-								cacheOptions.idleTimeoutAfterLargeChanges
+								/** @type {number} */
+								(cacheOptions.idleTimeout),
+								/** @type {number} */
+								(cacheOptions.idleTimeoutForInitialStore),
+								/** @type {number} */
+								(cacheOptions.idleTimeoutAfterLargeChanges)
 							).apply(compiler);
 							break;
 						}

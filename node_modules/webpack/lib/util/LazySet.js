@@ -138,6 +138,9 @@ class LazySet {
 		return this._set.delete(value);
 	}
 
+	/**
+	 * @returns {IterableIterator<[T, T]>} entries
+	 */
 	entries() {
 		this._deopt = true;
 		if (this._needMerge) this._merge();
@@ -152,6 +155,7 @@ class LazySet {
 	forEach(callbackFn, thisArg) {
 		this._deopt = true;
 		if (this._needMerge) this._merge();
+		// eslint-disable-next-line unicorn/no-array-for-each
 		this._set.forEach(callbackFn, thisArg);
 	}
 
@@ -164,18 +168,27 @@ class LazySet {
 		return this._set.has(item);
 	}
 
+	/**
+	 * @returns {IterableIterator<T>} keys
+	 */
 	keys() {
 		this._deopt = true;
 		if (this._needMerge) this._merge();
 		return this._set.keys();
 	}
 
+	/**
+	 * @returns {IterableIterator<T>} values
+	 */
 	values() {
 		this._deopt = true;
 		if (this._needMerge) this._merge();
 		return this._set.values();
 	}
 
+	/**
+	 * @returns {IterableIterator<T>} iterable iterator
+	 */
 	[Symbol.iterator]() {
 		this._deopt = true;
 		if (this._needMerge) this._merge();

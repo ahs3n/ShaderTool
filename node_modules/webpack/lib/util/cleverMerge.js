@@ -23,15 +23,17 @@ const DYNAMIC_INFO = Symbol("cleverMerge dynamic info");
  *  // when same arguments passed, gets the result from WeakMap and returns it.
  * cachedCleverMerge({a: 1}, {a: 2})
  * {a: 2}
- * @param {T} first first object
- * @param {O} second second object
+ * @param {T | null | undefined} first first object
+ * @param {O | null | undefined} second second object
  * @returns {T & O | T | O} merged object of first and second object
  */
 const cachedCleverMerge = (first, second) => {
-	if (second === undefined) return first;
-	if (first === undefined) return second;
-	if (typeof second !== "object" || second === null) return second;
-	if (typeof first !== "object" || first === null) return first;
+	if (second === undefined) return /** @type {T} */ (first);
+	if (first === undefined) return /** @type {O} */ (second);
+	if (typeof second !== "object" || second === null)
+		return /** @type {O} */ (second);
+	if (typeof first !== "object" || first === null)
+		return /** @type {T} */ (first);
 
 	let innerCache = mergeCache.get(first);
 	if (innerCache === undefined) {
@@ -80,11 +82,13 @@ const cachedSetProperty = (obj, property, value) => {
 	return /** @type {T} */ (result);
 };
 
+/** @typedef {Map<string, any>} ByValues */
+
 /**
  * @typedef {object} ObjectParsedPropertyEntry
  * @property {any | undefined} base base value
  * @property {string | undefined} byProperty the name of the selector property
- * @property {Map<string, any>} byValues value depending on selector property, merged with base
+ * @property {ByValues} byValues value depending on selector property, merged with base
  */
 
 /**
@@ -109,12 +113,17 @@ const cachedParseObject = obj => {
 };
 
 /**
- * @param {object} obj the object
+ * @template {object} T
+ * @param {T} obj the object
  * @returns {ParsedObject} parsed object
  */
 const parseObject = obj => {
 	const info = new Map();
 	let dynamicInfo;
+	/**
+	 * @param {string} p path
+	 * @returns {Partial<ObjectParsedPropertyEntry>} object parsed property entry
+	 */
 	const getInfo = p => {
 		const entry = info.get(p);
 		if (entry !== undefined) return entry;
@@ -128,26 +137,33 @@ const parseObject = obj => {
 	};
 	for (const key of Object.keys(obj)) {
 		if (key.startsWith("by")) {
-			const byProperty = key;
-			const byObj = obj[byProperty];
+			const byProperty = /** @type {keyof T} */ (key);
+			const byObj = /** @type {object} */ (obj[byProperty]);
 			if (typeof byObj === "object") {
 				for (const byValue of Object.keys(byObj)) {
-					const obj = byObj[byValue];
+					const obj = byObj[/** @type {keyof (keyof T)} */ (byValue)];
 					for (const key of Object.keys(obj)) {
 						const entry = getInfo(key);
 						if (entry.byProperty === undefined) {
-							entry.byProperty = byProperty;
+							entry.byProperty = /** @type {string} */ (byProperty);
 							entry.byValues = new Map();
 						} else if (entry.byProperty !== byProperty) {
 							throw new Error(
-								`${byProperty} and ${entry.byProperty} for a single property is not supported`
+								`${/** @type {string} */ (byProperty)} and ${entry.byProperty} for a single property is not supported`
 							);
 						}
-						entry.byValues.set(byValue, obj[key]);
+						/** @type {ByValues} */
+						(entry.byValues).set(
+							byValue,
+							obj[/** @type {keyof (keyof T)} */ (key)]
+						);
 						if (byValue === "default") {
 							for (const otherByValue of Object.keys(byObj)) {
-								if (!entry.byValues.has(otherByValue))
-									entry.byValues.set(otherByValue, undefined);
+								if (
+									!(/** @type {ByValues} */ (entry.byValues).has(otherByValue))
+								)
+									/** @type {ByValues} */
+									(entry.byValues).set(otherByValue, undefined);
 							}
 						}
 					}
@@ -165,11 +181,11 @@ const parseObject = obj => {
 				}
 			} else {
 				const entry = getInfo(key);
-				entry.base = obj[key];
+				entry.base = obj[/** @type {keyof T} */ (key)];
 			}
 		} else {
 			const entry = getInfo(key);
-			entry.base = obj[key];
+			entry.base = obj[/** @type {keyof T} */ (key)];
 		}
 	}
 	return {
@@ -179,12 +195,13 @@ const parseObject = obj => {
 };
 
 /**
+ * @template {object} T
  * @param {Map<string, ObjectParsedPropertyEntry>} info static properties (key is property name)
  * @param {{ byProperty: string, fn: Function } | undefined} dynamicInfo dynamic part
- * @returns {object} the object
+ * @returns {T} the object
  */
 const serializeObject = (info, dynamicInfo) => {
-	const obj = {};
+	const obj = /** @type {T} */ ({});
 	// Setup byProperty structure
 	for (const entry of info.values()) {
 		if (entry.byProperty !== undefined) {
@@ -196,7 +213,7 @@ const serializeObject = (info, dynamicInfo) => {
 	}
 	for (const [key, entry] of info) {
 		if (entry.base !== undefined) {
-			obj[key] = entry.base;
+			obj[/** @type {keyof T} */ (key)] = entry.base;
 		}
 		// Fill byProperty structure
 		if (entry.byProperty !== undefined) {
@@ -229,7 +246,7 @@ const getValueType = value => {
 	} else if (value === DELETE) {
 		return VALUE_TYPE_DELETE;
 	} else if (Array.isArray(value)) {
-		if (value.lastIndexOf("...") !== -1) return VALUE_TYPE_ARRAY_EXTEND;
+		if (value.includes("...")) return VALUE_TYPE_ARRAY_EXTEND;
 		return VALUE_TYPE_ATOM;
 	} else if (
 		typeof value === "object" &&
@@ -473,7 +490,7 @@ const mergeSingleValue = (a, b, internalCaching) => {
 				case VALUE_TYPE_UNDEFINED:
 					return b;
 				case VALUE_TYPE_DELETE:
-					return b.filter(item => item !== "...");
+					return /** @type {any[]} */ (b).filter(item => item !== "...");
 				case VALUE_TYPE_ARRAY_EXTEND: {
 					const newArray = [];
 					for (const item of b) {
@@ -488,7 +505,9 @@ const mergeSingleValue = (a, b, internalCaching) => {
 					return newArray;
 				}
 				case VALUE_TYPE_OBJECT:
-					return b.map(item => (item === "..." ? a : item));
+					return /** @type {any[]} */ (b).map(item =>
+						item === "..." ? a : item
+					);
 				default:
 					throw new Error("Not implemented");
 			}
@@ -520,15 +539,22 @@ const removeOperations = (obj, keysToKeepOriginalValue = []) => {
 			case VALUE_TYPE_DELETE:
 				break;
 			case VALUE_TYPE_OBJECT:
-				newObj[key] = removeOperations(
-					/** @type {TODO} */ (value),
-					keysToKeepOriginalValue
-				);
+				newObj[/** @type {keyof T} */ (key)] =
+					/** @type {T[keyof T]} */
+					(
+						removeOperations(
+							/** @type {TODO} */ (value),
+							keysToKeepOriginalValue
+						)
+					);
 				break;
 			case VALUE_TYPE_ARRAY_EXTEND:
-				newObj[key] =
-					/** @type {any[]} */
-					(value).filter(i => i !== "...");
+				newObj[/** @type {keyof T} */ (key)] =
+					/** @type {T[keyof T]} */
+					(
+						/** @type {any[]} */
+						(value).filter(i => i !== "...")
+					);
 				break;
 			default:
 				newObj[/** @type {keyof T} */ (key)] = value;
@@ -550,21 +576,21 @@ const resolveByProperty = (obj, byProperty, ...values) => {
 	if (typeof obj !== "object" || obj === null || !(byProperty in obj)) {
 		return obj;
 	}
-	const { [byProperty]: _byValue, ..._remaining } = /** @type {object} */ (obj);
+	const { [byProperty]: _byValue, ..._remaining } = obj;
 	const remaining = /** @type {T} */ (_remaining);
-	const byValue = /** @type {Record<string, T> | function(...any[]): T} */ (
-		_byValue
-	);
+	const byValue =
+		/** @type {Record<string, T> | function(...any[]): T} */
+		(_byValue);
 	if (typeof byValue === "object") {
 		const key = values[0];
 		if (key in byValue) {
 			return cachedCleverMerge(remaining, byValue[key]);
 		} else if ("default" in byValue) {
 			return cachedCleverMerge(remaining, byValue.default);
-		} else {
-			return /** @type {T} */ (remaining);
 		}
+		return remaining;
 	} else if (typeof byValue === "function") {
+		// eslint-disable-next-line prefer-spread
 		const result = byValue.apply(null, values);
 		return cachedCleverMerge(
 			remaining,
@@ -573,9 +599,9 @@ const resolveByProperty = (obj, byProperty, ...values) => {
 	}
 };
 
-exports.cachedSetProperty = cachedSetProperty;
-exports.cachedCleverMerge = cachedCleverMerge;
-exports.cleverMerge = cleverMerge;
-exports.resolveByProperty = resolveByProperty;
-exports.removeOperations = removeOperations;
-exports.DELETE = DELETE;
+module.exports.cachedSetProperty = cachedSetProperty;
+module.exports.cachedCleverMerge = cachedCleverMerge;
+module.exports.cleverMerge = cleverMerge;
+module.exports.resolveByProperty = resolveByProperty;
+module.exports.removeOperations = removeOperations;
+module.exports.DELETE = DELETE;

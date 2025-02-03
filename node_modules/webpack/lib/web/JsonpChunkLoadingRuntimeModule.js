@@ -65,9 +65,8 @@ class JsonpChunkLoadingRuntimeModule extends RuntimeModule {
 		const options = chunk.getEntryOptions();
 		if (options && options.baseUri) {
 			return `${RuntimeGlobals.baseURI} = ${JSON.stringify(options.baseUri)};`;
-		} else {
-			return `${RuntimeGlobals.baseURI} = document.baseURI || self.location.href;`;
 		}
+		return `${RuntimeGlobals.baseURI} = document.baseURI || self.location.href;`;
 	}
 
 	/**
@@ -104,12 +103,6 @@ class JsonpChunkLoadingRuntimeModule extends RuntimeModule {
 		const withHmrManifest = this._runtimeRequirements.has(
 			RuntimeGlobals.hmrDownloadManifest
 		);
-		const withPrefetch = this._runtimeRequirements.has(
-			RuntimeGlobals.prefetchChunkHandlers
-		);
-		const withPreload = this._runtimeRequirements.has(
-			RuntimeGlobals.preloadChunkHandlers
-		);
 		const withFetchPriority = this._runtimeRequirements.has(
 			RuntimeGlobals.hasFetchPriority
 		);
@@ -118,6 +111,12 @@ class JsonpChunkLoadingRuntimeModule extends RuntimeModule {
 		)}]`;
 		const chunkGraph = /** @type {ChunkGraph} */ (this.chunkGraph);
 		const chunk = /** @type {Chunk} */ (this.chunk);
+		const withPrefetch =
+			this._runtimeRequirements.has(RuntimeGlobals.prefetchChunkHandlers) &&
+			chunk.hasChildByOrder(chunkGraph, "prefetch", true, chunkHasJs);
+		const withPreload =
+			this._runtimeRequirements.has(RuntimeGlobals.preloadChunkHandlers) &&
+			chunk.hasChildByOrder(chunkGraph, "preload", true, chunkHasJs);
 		const conditionMap = chunkGraph.getChunkConditionMap(chunk, chunkHasJs);
 		const hasJsMatcher = compileBooleanMatcher(conditionMap);
 		const initialChunkIds = getInitialChunkIds(chunk, chunkGraph, chunkHasJs);
@@ -166,7 +165,7 @@ class JsonpChunkLoadingRuntimeModule extends RuntimeModule {
 												Template.indent([
 													"// setup Promise in chunk cache",
 													`var promise = new Promise(${runtimeTemplate.expressionFunction(
-														`installedChunkData = installedChunks[chunkId] = [resolve, reject]`,
+														"installedChunkData = installedChunks[chunkId] = [resolve, reject]",
 														"resolve, reject"
 													)});`,
 													"promises.push(installedChunkData[2] = promise);",

@@ -5,6 +5,8 @@
 
 "use strict";
 
+const { compareIds } = require("../util/comparators");
+
 /** @typedef {import("../Chunk")} Chunk */
 /** @typedef {import("../Chunk").ChunkId} ChunkId */
 /** @typedef {import("../Compiler")} Compiler */
@@ -39,10 +41,10 @@ class FlagIncludedChunksPlugin {
 					const modulesCount = compilation.modules.size;
 
 					// precalculate the modulo values for each bit
-					const modulo = 1 / Math.pow(1 / modulesCount, 1 / 31);
+					const modulo = 1 / (1 / modulesCount) ** (1 / 31);
 					const modulos = Array.from(
 						{ length: 31 },
-						(x, i) => Math.pow(modulo, i) | 0
+						(x, i) => (modulo ** i) | 0
 					);
 
 					// iterate all modules to generate bit values
@@ -74,7 +76,7 @@ class FlagIncludedChunksPlugin {
 						const chunkAModulesCount =
 							chunkGraph.getNumberOfChunkModules(chunkA);
 						if (chunkAModulesCount === 0) continue;
-						let bestModule = undefined;
+						let bestModule;
 						for (const module of chunkGraph.getChunkModulesIterable(chunkA)) {
 							if (
 								bestModule === undefined ||
@@ -112,8 +114,12 @@ class FlagIncludedChunksPlugin {
 							for (const m of chunkGraph.getChunkModulesIterable(chunkA)) {
 								if (!chunkGraph.isModuleInChunk(m, chunkB)) continue loopB;
 							}
+
 							/** @type {ChunkId[]} */
 							(chunkB.ids).push(/** @type {ChunkId} */ (chunkA.id));
+							// https://github.com/webpack/webpack/issues/18837
+							/** @type {ChunkId[]} */
+							(chunkB.ids).sort(compareIds);
 						}
 					}
 				}

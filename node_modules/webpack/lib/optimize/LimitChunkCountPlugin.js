@@ -57,7 +57,7 @@ class LimitChunkCountPlugin {
 	 */
 	constructor(options) {
 		validate(options);
-		this.options = options;
+		this.options = /** @type {LimitChunkCountPluginOptions} */ (options);
 	}
 
 	/**
@@ -74,9 +74,7 @@ class LimitChunkCountPlugin {
 				},
 				chunks => {
 					const chunkGraph = compilation.chunkGraph;
-					const maxChunks =
-						/** @type {LimitChunkCountPluginOptions} */
-						(options).maxChunks;
+					const maxChunks = options.maxChunks;
 					if (!maxChunks) return;
 					if (maxChunks < 1) return;
 					if (compilation.chunks.size <= maxChunks) return;
@@ -119,7 +117,7 @@ class LimitChunkCountPlugin {
 					/** @type {Map<Chunk, Set<ChunkCombination>>} */
 					const combinationsByChunk = new Map();
 
-					orderedChunks.forEach((b, bIdx) => {
+					for (const [bIdx, b] of orderedChunks.entries()) {
 						// create combination pairs with size and integrated size
 						for (let aIdx = 0; aIdx < bIdx; aIdx++) {
 							const a = orderedChunks[aIdx];
@@ -149,8 +147,7 @@ class LimitChunkCountPlugin {
 							addToSetMap(combinationsByChunk, a, c);
 							addToSetMap(combinationsByChunk, b, c);
 						}
-						return combinations;
-					});
+					}
 
 					// list of modified chunks during this run
 					// combinations affected by this change are skipped to allow

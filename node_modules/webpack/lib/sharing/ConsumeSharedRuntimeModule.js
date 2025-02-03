@@ -19,6 +19,7 @@ const {
 /** @typedef {import("../Chunk")} Chunk */
 /** @typedef {import("../Chunk").ChunkId} ChunkId */
 /** @typedef {import("../ChunkGraph")} ChunkGraph */
+/** @typedef {import("../ChunkGraph").ModuleId} ModuleId */
 /** @typedef {import("../Compilation")} Compilation */
 /** @typedef {import("../Module")} Module */
 /** @typedef {import("../Module").ReadOnlyRuntimeRequirements} ReadOnlyRuntimeRequirements */
@@ -47,15 +48,14 @@ class ConsumeSharedRuntimeModule extends RuntimeModule {
 		/** @type {(string | number)[]} */
 		const initialConsumes = [];
 		/**
-		 *
 		 * @param {Iterable<Module>} modules modules
 		 * @param {Chunk} chunk the chunk
 		 * @param {(string | number)[]} list list of ids
 		 */
 		const addModules = (modules, chunk, list) => {
 			for (const m of modules) {
-				const module = /** @type {ConsumeSharedModule} */ (m);
-				const id = chunkGraph.getModuleId(module);
+				const module = m;
+				const id = /** @type {ModuleId} */ (chunkGraph.getModuleId(module));
 				list.push(id);
 				moduleIdToSourceMapping.set(
 					id,
@@ -67,7 +67,9 @@ class ConsumeSharedRuntimeModule extends RuntimeModule {
 				);
 			}
 		};
-		for (const chunk of /** @type {Chunk} */ (this.chunk).getAllAsyncChunks()) {
+		for (const chunk of /** @type {Chunk} */ (
+			this.chunk
+		).getAllReferencedChunks()) {
 			const modules = chunkGraph.getChunkModulesIterableBySourceType(
 				chunk,
 				"consume-shared"
@@ -283,7 +285,7 @@ class ConsumeSharedRuntimeModule extends RuntimeModule {
 								`delete ${RuntimeGlobals.moduleCache}[id];`,
 								"var factory = moduleToHandlerMapping[id]();",
 								'if(typeof factory !== "function") throw new Error("Shared module is not available for eager consumption: " + id);',
-								`module.exports = factory();`
+								"module.exports = factory();"
 							])}`
 						])});`
 					])

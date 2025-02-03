@@ -13,6 +13,7 @@ const Module = require("./Module");
 const { parseResource } = require("./util/identifier");
 
 /** @typedef {import("./ChunkGraph")} ChunkGraph */
+/** @typedef {import("./ChunkGraph").ModuleId} ModuleId */
 /** @typedef {import("./Compilation").AssetInfo} AssetInfo */
 /** @typedef {import("./Compilation").PathData} PathData */
 /** @typedef {import("./Compiler")} Compiler */
@@ -55,7 +56,7 @@ const hashLength = (replacer, handler, assetInfo, hashName) => {
 	/** @type {ReplacerFunction} */
 	const fn = (match, arg, input) => {
 		let result;
-		const length = arg && parseInt(arg, 10);
+		const length = arg && Number.parseInt(arg, 10);
 
 		if (length && handler) {
 			result = handler(length);
@@ -101,9 +102,9 @@ const replacer = (value, allowEmpty) => {
 			}
 
 			return "";
-		} else {
-			return `${value}`;
 		}
+
+		return `${value}`;
 	};
 
 	return fn;
@@ -129,8 +130,10 @@ const deprecated = (fn, message, code) => {
 	};
 };
 
+/** @typedef {string | function(PathData, AssetInfo=): string} TemplatePath */
+
 /**
- * @param {string | function(PathData, AssetInfo=): string} path the raw path
+ * @param {TemplatePath} path the raw path
  * @param {PathData} data context data
  * @param {AssetInfo | undefined} assetInfo extra info about the asset (will be written to)
  * @returns {string} the interpolated path
@@ -155,23 +158,29 @@ const replacePathVariables = (path, data, assetInfo) => {
 	// [ext] - .js
 	if (typeof data.filename === "string") {
 		// check that filename is data uri
-		let match = data.filename.match(/^data:([^;,]+)/);
+		const match = data.filename.match(/^data:([^;,]+)/);
 		if (match) {
 			const ext = mime.extension(match[1]);
 			const emptyReplacer = replacer("", true);
+			// "XXXX" used for `updateHash`, so we don't need it here
+			const contentHash =
+				data.contentHash && !/X+/.test(data.contentHash)
+					? data.contentHash
+					: false;
+			const baseReplacer = contentHash ? replacer(contentHash) : emptyReplacer;
 
 			replacements.set("file", emptyReplacer);
 			replacements.set("query", emptyReplacer);
 			replacements.set("fragment", emptyReplacer);
 			replacements.set("path", emptyReplacer);
-			replacements.set("base", emptyReplacer);
-			replacements.set("name", emptyReplacer);
+			replacements.set("base", baseReplacer);
+			replacements.set("name", baseReplacer);
 			replacements.set("ext", replacer(ext ? `.${ext}` : "", true));
 			// Legacy
 			replacements.set(
 				"filebase",
 				deprecated(
-					emptyReplacer,
+					baseReplacer,
 					"[filebase] is now [base]",
 					"DEP_WEBPACK_TEMPLATE_PATH_PLUGIN_REPLACE_PATH_VARIABLES_FILENAME"
 				)
@@ -292,17 +301,16 @@ const replacePathVariables = (path, data, assetInfo) => {
 		const idReplacer = replacer(() =>
 			prepareId(
 				module instanceof Module
-					? /** @type {ChunkGraph} */ (chunkGraph).getModuleId(module)
+					? /** @type {ModuleId} */
+						(/** @type {ChunkGraph} */ (chunkGraph).getModuleId(module))
 					: module.id
 			)
 		);
 		const moduleHashReplacer = hashLength(
 			replacer(() =>
 				module instanceof Module
-					? /** @type {ChunkGraph} */ (chunkGraph).getRenderedModuleHash(
-							module,
-							data.runtime
-						)
+					? /** @type {ChunkGraph} */
+						(chunkGraph).getRenderedModuleHash(module, data.runtime)
 					: module.hash
 			),
 			"hashWithLength" in module ? module.hashWithLength : undefined,

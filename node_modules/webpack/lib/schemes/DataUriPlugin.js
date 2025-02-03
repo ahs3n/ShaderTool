@@ -11,11 +11,11 @@ const NormalModule = require("../NormalModule");
 
 // data URL scheme: "data:text/javascript;charset=utf-8;base64,some-string"
 // http://www.ietf.org/rfc/rfc2397.txt
-const URIRegEx = /^data:([^;,]+)?((?:;[^;,]+)*?)(?:;(base64))?,(.*)$/i;
+const URIRegEx = /^data:([^;,]+)?((?:;[^;,]+)*?)(?:;(base64)?)?,(.*)$/i;
 
 /**
  * @param {string} uri data URI
- * @returns {Buffer|null} decoded data
+ * @returns {Buffer | null} decoded data
  */
 const decodeDataURI = uri => {
 	const match = URIRegEx.exec(uri);

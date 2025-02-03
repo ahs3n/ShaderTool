@@ -7,6 +7,7 @@
 
 const { OriginalSource, RawSource } = require("webpack-sources");
 const Module = require("./Module");
+const { JS_TYPES } = require("./ModuleSourceTypesConstants");
 const { JAVASCRIPT_MODULE_TYPE_DYNAMIC } = require("./ModuleTypeConstants");
 const RuntimeGlobals = require("./RuntimeGlobals");
 const DelegatedSourceDependency = require("./dependencies/DelegatedSourceDependency");
@@ -19,13 +20,13 @@ const makeSerializable = require("./util/makeSerializable");
 /** @typedef {import("./Compilation")} Compilation */
 /** @typedef {import("./Dependency").UpdateHashContext} UpdateHashContext */
 /** @typedef {import("./DependencyTemplates")} DependencyTemplates */
+/** @typedef {import("./Generator").SourceTypes} SourceTypes */
 /** @typedef {import("./LibManifestPlugin").ManifestModuleData} ManifestModuleData */
 /** @typedef {import("./Module").CodeGenerationContext} CodeGenerationContext */
 /** @typedef {import("./Module").CodeGenerationResult} CodeGenerationResult */
 /** @typedef {import("./Module").LibIdentOptions} LibIdentOptions */
 /** @typedef {import("./Module").NeedBuildContext} NeedBuildContext */
 /** @typedef {import("./Module").SourceContext} SourceContext */
-/** @typedef {import("./Module").SourceTypes} SourceTypes */
 /** @typedef {import("./RequestShortener")} RequestShortener */
 /** @typedef {import("./ResolverFactory").ResolverWithOptions} ResolverWithOptions */
 /** @typedef {import("./RuntimeTemplate")} RuntimeTemplate */
@@ -36,7 +37,10 @@ const makeSerializable = require("./util/makeSerializable");
 /** @typedef {import("./util/Hash")} Hash */
 /** @typedef {import("./util/fs").InputFileSystem} InputFileSystem */
 
-const TYPES = new Set(["javascript"]);
+/** @typedef {string} SourceRequest */
+/** @typedef {"require" | "object"} Type */
+/** @typedef {TODO} Data */
+
 const RUNTIME_REQUIREMENTS = new Set([
 	RuntimeGlobals.module,
 	RuntimeGlobals.require
@@ -44,9 +48,9 @@ const RUNTIME_REQUIREMENTS = new Set([
 
 class DelegatedModule extends Module {
 	/**
-	 * @param {string} sourceRequest source request
-	 * @param {TODO} data data
-	 * @param {"require" | "object"} type type
+	 * @param {SourceRequest} sourceRequest source request
+	 * @param {Data} data data
+	 * @param {Type} type type
 	 * @param {string} userRequest user request
 	 * @param {string | Module} originalRequest original request
 	 */
@@ -70,7 +74,7 @@ class DelegatedModule extends Module {
 	 * @returns {SourceTypes} types available (do not mutate)
 	 */
 	getSourceTypes() {
-		return TYPES;
+		return JS_TYPES;
 	}
 
 	/**

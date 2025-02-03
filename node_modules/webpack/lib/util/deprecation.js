@@ -15,7 +15,10 @@ const deprecationCache = new Map();
  * @property {true} _fakeHook it's a fake hook
  */
 
-/** @template T @typedef {T & FakeHookMarker} FakeHook<T> */
+/**
+ * @template T
+ * @typedef {T & FakeHookMarker} FakeHook<T>
+ */
 
 /**
  * @param {string} message deprecation message
@@ -28,7 +31,7 @@ const createDeprecation = (message, code) => {
 	const fn = util.deprecate(
 		() => {},
 		message,
-		"DEP_WEBPACK_DEPRECATION_" + code
+		`DEP_WEBPACK_DEPRECATION_${code}`
 	);
 	deprecationCache.set(message, fn);
 	return fn;
@@ -69,7 +72,7 @@ const DISABLED_METHODS = [
  * @param {string} name property name
  * @returns {void}
  */
-exports.arrayToSetDeprecation = (set, name) => {
+module.exports.arrayToSetDeprecation = (set, name) => {
 	for (const method of COPY_METHODS) {
 		if (set[method]) continue;
 		const d = createDeprecation(
@@ -84,7 +87,11 @@ exports.arrayToSetDeprecation = (set, name) => {
 		set[method] = function () {
 			d();
 			const array = Array.from(this);
-			return Array.prototype[method].apply(array, arguments);
+			return Array.prototype[/** @type {keyof COPY_METHODS} */ (method)].apply(
+				array,
+				// eslint-disable-next-line prefer-rest-params
+				arguments
+			);
 		};
 	}
 	const dPush = createDeprecation(
@@ -106,6 +113,7 @@ exports.arrayToSetDeprecation = (set, name) => {
 	 */
 	set.push = function () {
 		dPush();
+		// eslint-disable-next-line prefer-rest-params
 		for (const item of Array.from(arguments)) {
 			this.add(item);
 		}
@@ -128,13 +136,13 @@ exports.arrayToSetDeprecation = (set, name) => {
 		 * @this {Set<any>} a Set
 		 * @returns {any} the value at this location
 		 */
+		// eslint-disable-next-line func-style
 		const fn = function () {
 			dIndexer();
 			let i = 0;
 			for (const item of this) {
 				if (i++ === index) return item;
 			}
-			return undefined;
 		};
 		return fn;
 	};
@@ -171,14 +179,29 @@ exports.arrayToSetDeprecation = (set, name) => {
 	set[Symbol.isConcatSpreadable] = true;
 };
 
-exports.createArrayToSetDeprecationSet = name => {
+/**
+ * @template T
+ * @param {string} name name
+ * @returns {{ new <T = any>(values?: readonly T[] | null): SetDeprecatedArray<T> }} SetDeprecatedArray
+ */
+module.exports.createArrayToSetDeprecationSet = name => {
 	let initialized = false;
+
+	/**
+	 * @template T
+	 */
 	class SetDeprecatedArray extends Set {
+		/**
+		 * @param {readonly T[] | null=} items items
+		 */
 		constructor(items) {
 			super(items);
 			if (!initialized) {
 				initialized = true;
-				exports.arrayToSetDeprecation(SetDeprecatedArray.prototype, name);
+				module.exports.arrayToSetDeprecation(
+					SetDeprecatedArray.prototype,
+					name
+				);
 			}
 		}
 	}
@@ -186,41 +209,77 @@ exports.createArrayToSetDeprecationSet = name => {
 };
 
 /**
- * @template T
- * @param {object} obj object
+ * @template {object} T
+ * @param {T} obj object
  * @param {string} name property name
  * @param {string} code deprecation code
  * @param {string} note additional note
- * @returns {object} frozen object with deprecation when modifying
+ * @returns {Proxy<T>} frozen object with deprecation when modifying
  */
-exports.soonFrozenObjectDeprecation = (obj, name, code, note = "") => {
+module.exports.soonFrozenObjectDeprecation = (obj, name, code, note = "") => {
 	const message = `${name} will be frozen in future, all modifications are deprecated.${
 		note && `\n${note}`
 	}`;
-	return new Proxy(obj, {
-		set: util.deprecate(
-			(target, property, value, receiver) =>
-				Reflect.set(target, property, value, receiver),
-			message,
-			code
-		),
-		defineProperty: util.deprecate(
-			(target, property, descriptor) =>
-				Reflect.defineProperty(target, property, descriptor),
-			message,
-			code
-		),
-		deleteProperty: util.deprecate(
-			(target, property) => Reflect.deleteProperty(target, property),
-			message,
-			code
-		),
-		setPrototypeOf: util.deprecate(
-			(target, proto) => Reflect.setPrototypeOf(target, proto),
-			message,
-			code
-		)
-	});
+	return /** @type {Proxy<T>} */ (
+		new Proxy(/** @type {object} */ (obj), {
+			set: util.deprecate(
+				/**
+				 * @param {T} target target
+				 * @param {string | symbol} property property
+				 * @param {any} value value
+				 * @param {any} receiver receiver
+				 * @returns {boolean} result
+				 */
+				(target, property, value, receiver) =>
+					Reflect.set(
+						/** @type {object} */ (target),
+						property,
+						value,
+						receiver
+					),
+				message,
+				code
+			),
+			defineProperty: util.deprecate(
+				/**
+				 * @param {T} target target
+				 * @param {string | symbol} property property
+				 * @param {PropertyDescriptor} descriptor descriptor
+				 * @returns {boolean} result
+				 */
+				(target, property, descriptor) =>
+					Reflect.defineProperty(
+						/** @type {object} */ (target),
+						property,
+						descriptor
+					),
+				message,
+				code
+			),
+			deleteProperty: util.deprecate(
+				/**
+				 * @param {T} target target
+				 * @param {string | symbol} property property
+				 * @returns {boolean} result
+				 */
+				(target, property) =>
+					Reflect.deleteProperty(/** @type {object} */ (target), property),
+				message,
+				code
+			),
+			setPrototypeOf: util.deprecate(
+				/**
+				 * @param {T} target target
+				 * @param {object | null} proto proto
+				 * @returns {boolean} result
+				 */
+				(target, proto) =>
+					Reflect.setPrototypeOf(/** @type {object} */ (target), proto),
+				message,
+				code
+			)
+		})
+	);
 };
 
 /**
@@ -253,23 +312,32 @@ const deprecateAllProperties = (obj, message, code) => {
 				enumerable: descriptor.enumerable,
 				get: util.deprecate(() => value, message, code),
 				set: descriptor.writable
-					? util.deprecate(v => (value = v), message, code)
+					? util.deprecate(
+							/**
+							 * @template T
+							 * @param {T} v value
+							 * @returns {T} result
+							 */
+							v => (value = v),
+							message,
+							code
+						)
 					: undefined
 			});
 		}
 	}
 	return /** @type {T} */ (newObj);
 };
-exports.deprecateAllProperties = deprecateAllProperties;
+module.exports.deprecateAllProperties = deprecateAllProperties;
 
 /**
- * @template T
+ * @template {object} T
  * @param {T} fakeHook fake hook implementation
  * @param {string=} message deprecation message (not deprecated when unset)
  * @param {string=} code deprecation code (not deprecated when unset)
  * @returns {FakeHook<T>} fake hook which redirects
  */
-exports.createFakeHook = (fakeHook, message, code) => {
+module.exports.createFakeHook = (fakeHook, message, code) => {
 	if (message && code) {
 		fakeHook = deprecateAllProperties(fakeHook, message, code);
 	}

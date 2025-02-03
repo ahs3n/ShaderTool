@@ -22,7 +22,7 @@ const {
 /** @typedef {import("./ModuleGraph")} ModuleGraph */
 
 /** @typedef {{id: number}} HasId */
-/** @typedef {{module: Module, loc: DependencyLocation, request: string}} OriginRecord */
+/** @typedef {{module: Module | null, loc: DependencyLocation, request: string}} OriginRecord */
 
 /**
  * @typedef {object} RawChunkGroupOptions
@@ -31,7 +31,7 @@ const {
  * @property {("low" | "high" | "auto")=} fetchPriority
  */
 
-/** @typedef {RawChunkGroupOptions & { name?: string }} ChunkGroupOptions */
+/** @typedef {RawChunkGroupOptions & { name?: string | null }} ChunkGroupOptions */
 
 let debugId = 5000;
 
@@ -137,7 +137,7 @@ class ChunkGroup {
 
 	/**
 	 * returns the name of current ChunkGroup
-	 * @returns {string | undefined} returns the ChunkGroup name
+	 * @returns {string | null | undefined} returns the ChunkGroup name
 	 */
 	get name() {
 		return this.options.name;
@@ -404,7 +404,7 @@ class ChunkGroup {
 	}
 
 	/**
-	 * @param {Module} module origin module
+	 * @param {Module | null} module origin module
 	 * @param {DependencyLocation} loc location of the reference in the origin module
 	 * @param {string} request request name of the reference
 	 * @returns {void}
@@ -478,7 +478,6 @@ class ChunkGroup {
 	/**
 	 * Sorting predicate which allows current ChunkGroup to be compared against another.
 	 * Sorting values are based off of number of chunks in ChunkGroup.
-	 *
 	 * @param {ChunkGraph} chunkGraph the chunk graph
 	 * @param {ChunkGroup} otherGroup the chunkGroup to compare this against
 	 * @returns {-1|0|1} sort position for comparison

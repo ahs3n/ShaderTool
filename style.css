@@ -195,11 +195,15 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .optionsBox {
-    flex-direction: row;
-    justify-content: space-around;
-    flex-wrap: wrap;
-    min-width: min-content;
-    width: max-content;
+    width: 100%;
+    box-sizing: border-box;
+
+}
+
+.optionsBoxes {
+    width: min-content;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 #advancedBox {
