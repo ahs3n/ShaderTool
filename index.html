@@ -41,22 +41,20 @@
           <hr class="breaker">
 
           <div style="display: flex; justify-content: space-evenly; width: 100%; padding: .5rem 0">
-            <a style="user-select: none; min-width: max-content" onclick="advancedBox.style.display = advancedBox.style.display=='block'?'none':'block'; archiveBox.style.display='none'; renderBox.style.display='none';">
-              <p>
-                > Advanced
-              </p>
+            
+            <a id="advancedSelect" class="optionSelect" onclick="boxSwitch(0)">
+              <p style="display:inline">></p>
+              <p style="display:inline">dvanced</p>
             </a>
             
-            <a style="user-select: none; min-width: max-content" onclick="archiveBox.style.display = archiveBox.style.display=='block'?'none':'block'; advancedBox.style.display='none'; renderBox.style.display='none';">
-              <p>
-                > Archive
-              </p>
+            <a id="archiveSelect" class="optionSelect" onclick="boxSwitch(1)">
+              <p style="display:inline">></p>
+              <p style="display:inline">Archive</p>
             </a>
 
-            <a style="user-select: none; min-width: max-content" class="dropdownSelector" onclick="renderBox.style.display = renderBox.style.display=='block'?'none':'block'; advancedBox.style.display='none'; archiveBox.style.display='none';">
-              <p>
-                > Render
-              </p>
+            <a id="renderSelect" class="optionSelect" onclick="boxSwitch(2)">
+              <p style="display:inline">></p>
+              <p style="display:inline">Render</p>
             </a>
           </div>
 
@@ -241,9 +239,30 @@
     </div>
     
     <script>
-      let advancedBox = document.getElementById('advancedBox');
-      let archiveBox = document.getElementById('archiveBox'); 
-      let renderBox = document.getElementById('renderBox'); 
+      // let advancedBox = document.getElementById('advancedBox');
+      // let archiveBox = document.getElementById('archiveBox'); 
+      // let renderBox = document.getElementById('renderBox'); 
+      boxes = [
+        document.getElementById('advancedBox'),
+        document.getElementById('archiveBox'),
+        document.getElementById('renderBox')
+      ];
+      boxSelectors = [
+        document.getElementById('advancedSelect'),
+        document.getElementById('archiveSelect'),
+        document.getElementById('renderSelect')
+      ];
+
+      function boxSwitch(i){
+        boxes[i].style.display = boxes[i].style.display=='block'?'none':'block'; 
+        boxSelectors[i].children[0].innerHTML = boxes[i].style.display=='block'?'v':'>'; // Should be swapped in favour of system independent, and properly aligned, images
+        for (var x = 0; x < 3; x++){
+          if (boxes[x] != boxes[i]){
+            boxes[x].style.display = 'none';
+            boxSelectors[x].children[0].innerHTML = '>';
+          }
+        }
+      }
     </script>
     
     <script id="vertex-shader" type="x-shader/x-vertex">

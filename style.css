@@ -206,6 +206,11 @@ input[type="range"]::-moz-range-thumb {
     margin-right: auto;
 }
 
+.optionSelect {
+    user-select: none; 
+    min-width: max-content
+}
+
 #advancedBox {
     display: none;
 }
@@ -303,4 +308,10 @@ a:hover {
 
 .no-select {
     user-select: none; /* Prevents text selection */
+}
+
+
+/* For Monaco editor */
+.line-numbers {
+    user-select: none;
 }
