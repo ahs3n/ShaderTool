@@ -44,7 +44,7 @@
             
             <a id="advancedSelect" class="optionSelect" onclick="boxSwitch(0)">
               <p style="display:inline">></p>
-              <p style="display:inline">dvanced</p>
+              <p style="display:inline">Advanced</p>
             </a>
             
             <a id="archiveSelect" class="optionSelect" onclick="boxSwitch(1)">
@@ -239,9 +239,6 @@
     </div>
     
     <script>
-      // let advancedBox = document.getElementById('advancedBox');
-      // let archiveBox = document.getElementById('archiveBox'); 
-      // let renderBox = document.getElementById('renderBox'); 
       boxes = [
         document.getElementById('advancedBox'),
         document.getElementById('archiveBox'),
@@ -255,7 +252,8 @@
 
       function boxSwitch(i){
         boxes[i].style.display = boxes[i].style.display=='block'?'none':'block'; 
-        boxSelectors[i].children[0].innerHTML = boxes[i].style.display=='block'?'v':'>'; // Should be swapped in favour of system independent, and properly aligned, images
+        boxSelectors[i].children[0].innerHTML = boxes[i].style.display=='block'?'v':'>'; 
+          // Should be swapped in favour of system independent, and properly aligned, images
         for (var x = 0; x < 3; x++){
           if (boxes[x] != boxes[i]){
             boxes[x].style.display = 'none';
@@ -266,15 +264,15 @@
     </script>
     
     <script id="vertex-shader" type="x-shader/x-vertex">
-#ifdef GL_ES
-  precision highp float;
-#endif
+      #ifdef GL_ES
+        precision highp float;
+      #endif
 
-attribute vec2 aPos_ndc;
+      attribute vec2 aPos_ndc;
 
-void main() {
-  gl_Position = vec4(aPos_ndc, 0.0, 1.0);
-}
+      void main() {
+        gl_Position = vec4(aPos_ndc, 0.0, 1.0);
+      }
     </script>
 
     <script type="module" src="dist/index.js"></script>
