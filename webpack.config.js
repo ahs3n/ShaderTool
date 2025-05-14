@@ -14,6 +14,7 @@ module.exports = {
     output: {
         filename: '[name].js',
         path: path.resolve(__dirname, 'dist'),
+        publicPath: path.resolve(__dirname, '/dist/')
     },
     cache: {
         type: 'filesystem',

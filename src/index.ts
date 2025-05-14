@@ -34,7 +34,7 @@ class ShaderInfo {
     bufferB: string;
     bufferC: string;
     bufferD: string;
-};
+}
 
 const baseFragmentShader = `
 #ifdef GL_ES
@@ -58,11 +58,8 @@ class Renderer {
         const vertexArray = new Float32Array([
             -1, -1,
              1, -1,
-            -1,  1,
-
              1,  1,
-             1, -1,
-            -1,  1,
+            -1,  1
         ]);
 
         this.fullscreenQuadVAO = gl.createBuffer();
@@ -95,18 +92,19 @@ class Renderer {
 
     draw(time: number, frame: number) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.fullscreenQuadVAO);
+
         this.uniformF(this.prg_Image, "iTime", time);
         this.uniformI(this.prg_Image, "iFrame", frame);
         this.uniform2F(this.prg_Image, "iResolution", [gl.canvas.width, gl.canvas.height]);
+        
         gl.useProgram(this.prg_Image);
-
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 6);
     }
 
     compile_image(source: string) {
         console.log("compile_image");
+        
         let finalSource = baseFragmentShader.replace("/* INSERT SHADER SOURCE HERE */", source);
-
         let imageShader = gl.createShader(gl.FRAGMENT_SHADER);
 
         if (!imageShader) {
@@ -117,13 +115,12 @@ class Renderer {
         gl.compileShader(imageShader);
         
         gl.deleteProgram(this.prg_Image);
-
         this.prg_Image = gl.createProgram();
+
         gl.attachShader(this.prg_Image, this.vertexShader);
         gl.attachShader(this.prg_Image, imageShader);
 
         gl.linkProgram(this.prg_Image);
-
         gl.useProgram(this.prg_Image);
 
         gl.bindAttribLocation(this.prg_Image, 0, "aPos_ndc"); 
@@ -179,9 +176,48 @@ let tOffset: number = 0;
 let shaders: ShaderInfo;
 let renderer: Renderer;
 
+let UI = {
+    screen : {
+        resX : null,
+        resY : null,
+        pauseButton : null,
+        resetButton : null
+    },
+    advanced : {
+        iTimeMin : null,
+        iTimeMax : null,
+        iTime : null,
+        iTimeLoop : null,
+        iFrame : null,
+        paintCalls : null,
+        frameTimer : null,
+    },
+    editor : {
+        compileButton : null
+    }
+}
+
 function main() {
 
-        // TODO: load shaders from STOYAPI
+    UI.screen.resX = document.getElementById("resSelX") as HTMLTextAreaElement;
+    UI.screen.resY = document.getElementById("resSelY") as HTMLTextAreaElement;
+    UI.screen.resetButton = document.getElementById("resetButton");
+    UI.screen.pauseButton = document.getElementById("pauseButton");
+    
+    UI.advanced.iTimeMin = document.getElementById("iTimeMin");
+    UI.advanced.iTimeMax = document.getElementById("iTimeMax");
+    UI.advanced.iTime = document.getElementById("iTime");
+    // iTimeLoop : null,
+    // iFrame : null,
+    // paintCalls : null,
+    // frameTimer : null,
+
+    UI.editor.compileButton = document.getElementById("compileButton");
+
+
+
+
+        // TODO: load shaders from shadertoy
     shaders = new ShaderInfo(`
 /* This animation is the material of my first youtube tutorial about creative 
    coding, which is a video in which I try to introduce programmers to GLSL 
@@ -245,7 +281,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         renderer.draw(time, frameCount);
 
         let deltaTime = performance.now() / 1000.0 - lastTime;
-
         let fps = 1.0 / deltaTime;
 
         if (averageFPS == -1 || averageFPS == Infinity) {
@@ -253,13 +288,15 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         } else {
             averageFPS = 0.9 * averageFPS + 0.1 * fps;
         }
-        fpsCounterElem.innerText = `${averageFPS.toFixed(1)}`;
 
+        fpsCounterElem.innerText = `${averageFPS.toFixed(1)}`;
         timeDisplayElem.innerText = `${time.toFixed(2)}`;
 
         lastTime = performance.now() / 1000.0;
-
         frameCount++;
+
+        // console.log("animate");
+        // console.log(frameCount - animationFrameID);
 
         if (running) animationFrameID = requestAnimationFrame(animate);
     }
@@ -275,9 +312,9 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         }
         running = !running;
     }
-    globalThis.pauseShader = pauseShader;
+    UI.screen.pauseButton.addEventListener("click", pauseShader);
 
-    function restartShader() {
+    function resetShader() {
         start = performance.now() / 1000.0;
         tOffset = 0;
         averageFPS = -1;
@@ -285,7 +322,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         cancelAnimationFrame(animationFrameID);
         animate();
     }
-    globalThis.restartShader = restartShader;
+    UI.screen.resetButton.addEventListener("click", resetShader);
 
     function compileShaders() {
         let compileButtonElem = document.getElementById("compileButton");
@@ -304,29 +341,37 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
             compileButtonElem.innerText = "> compile <";
         }, 1500);
     }
-    globalThis.compileShaders = compileShaders;
-
-    let resSelX = document.getElementById("resSelX") as HTMLTextAreaElement;
-    let resSelY = document.getElementById("resSelY") as HTMLTextAreaElement;
+    UI.editor.compileButton.addEventListener("click", compileShaders);
 
     function validateNumericInput(event) {
-        // remove any non-numeric characters
-        if (event.target.value.includes("\n")) {
-            event.target.value = event.target.value.replace(/[^0-9]/g, '');
-            resizeCanvas();
-        }
         event.target.value = event.target.value.replace(/[^0-9]/g, '');
     }
-    resSelX.addEventListener("input", validateNumericInput);
-    resSelY.addEventListener("input", validateNumericInput);
 
+    function numericInputCallback(event, type, callback) {
+        console.log(type);
+        if (event.target.nodeName == 'TEXTAREA' && type == "input"){
+            if (event.target.value.includes("\n")){
+                validateNumericInput(event);
+                callback();
+            }
+            validateNumericInput(event);
+        } else {
+            validateNumericInput(event);
+            callback();
+        }
+    }
+
+    function nic(e,t,c){
+        numericInputCallback(e,t,c);
+    }
+    
     function resizeCanvas() {
-        let x: number = parseInt(resSelX.value);
-        let y: number = parseInt(resSelY.value);
-
+        let x: number = parseInt(UI.screen.resX.value);
+        let y: number = parseInt(UI.screen.resY.value);
+        
         console.log(x, y);
-        console.log(resSelX.value, resSelY.value);
-
+        console.log(UI.screen.resX.value, UI.screen.resY.value);
+        
         canvas.width = x;
         canvas.height = y;
         canvas.style.width = `${x}px`;
@@ -334,7 +379,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         gl.canvas.width = x;
         gl.canvas.height = y;
         gl.viewport(0,0, x,y);
-
+        
         cancelAnimationFrame(animationFrameID);
         if (!running) {
             pauseShader();
@@ -344,8 +389,29 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
             animate();
         }
     }
-    resSelX.addEventListener("focusout", resizeCanvas);
-    resSelY.addEventListener("focusout", resizeCanvas);
+
+    // globalThis.iTime = UI.advanced.iTime;
+    
+    ["input", "focusout"].forEach( t => {
+        console.log(t);
+        UI.screen.resX.addEventListener(t, (e) => nic(e, t, resizeCanvas));
+        UI.screen.resY.addEventListener(t, (e) => nic(e, t, resizeCanvas));
+
+        UI.advanced.iTimeMin.addEventListener(t, (e) => nic(e, t, _ => {
+            let x = parseInt(UI.advanced.iTimeMin.value);
+            UI.advanced.iTime.min = x;
+            console.log("iTime min range:", x);
+        }));
+        
+        // UI.advanced.iTimeMax.addEventListener(t, (e) => nic(e, t, _ => {
+        //     let x = parseInt(UI.advanced.iTimeMax.value);
+        //     UI.advanced.iTime.max = x;
+        //     console.log("iTime max range:", x);
+        // }));
+        // WHY DOES THIS BREAK EVERYTHING
+    });
+
+
 
 }
 

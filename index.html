@@ -30,7 +30,8 @@
           </div>
           <p>
             <span style="user-select: none">
-              <span style="user-select: none" class="inline" onclick="restartShader()">|&lt</span> <span style="user-select: none" class="inline" onclick="pauseShader()" >||</span>
+              <span class="inline" id="resetButton">|&lt</span> 
+              <span class="inline" id="pauseButton">||</span>
             </span>
             <span class="inline" id="iTimeDisplay">0</span>s <span class="inline" id="fpsCounter">XX.x</span>fps
           </p>
@@ -46,7 +47,7 @@
               <p style="display:inline">></p>
               <p style="display:inline">Advanced</p>
             </a>
-            
+
             <a id="archiveSelect" class="optionSelect" onclick="boxSwitch(1)">
               <p style="display:inline">></p>
               <p style="display:inline">Archive</p>
@@ -60,9 +61,25 @@
 
           <hr class="breaker">
           
-          <div id="advancedBox" class = "optionsBoxes">
-
+          <div id="advancedBox" class = "optionsBoxes" style="width: auto; margin-left: 1rem; margin-right: 1rem;">
+            
             <div class="inputRow">
+              <div class="inputSection">
+                <p>iTime:</p>
+                <input type="number" placeholder="0" id="iTimeMin">
+              </div>
+              <input type="range" min="0" max="60" id="iTime">  <!-- min and max must be set to match range specified -->
+              <div class="inputSection">
+                <input type="number" placeholder="60" id="iTimeMin">
+                <button>⟳</button> <!-- This button is a toggle:when toggled on, it will be blue and time will loop in the specified range -->
+              </div>
+            </div>
+            
+            <div class="inputRow">
+              <div class="inputSection">
+                <p>iFrame:</p>
+                <input type="number" placeholder="currentFrameByJS">
+              </div>
               <div class="inputSection">
                 <p>Paint calls:</p>
                 <input type="number" placeholder="1" min="1">
@@ -70,26 +87,6 @@
               <div class="inputSection">
                 <button>Frame Timer</button> <!-- This is a toggle -->
               </div>
-            </div>
-
-            <div class="inputRow">
-              <div class="inputSection">
-                <p>iTime:</p>
-                <input type="number" placeholder="0">
-              </div>
-              <input type="range">
-              <div class="inputSection">
-                <input type="number" placeholder="60" min="0" max="60"> <!-- min and max must be set to match range specified -->
-                <button>⟳</button> <!-- This button is a toggle:when toggled on, it will be blue and time will loop in the specified range -->
-              </div>
-            </div>
-
-            <div class="inputRow">
-              <div class="inputSection">
-                <p>iFrame:</p>
-                <input type="number" placeholder="currentFrameByJS">
-              </div>
-              <div class="inputSection"></div>
             </div>
 
             <div class="inputRow">
@@ -120,18 +117,26 @@
 
             <div class="inputRow">
               <p>iDate:</p> <!-- default to current data -->
-              <p>Year:</p>
-              <input type="number" placeholder="2024">
-              <p>Month:</p>
-              <input type="number" placeholder="06">
+              <div class="inputSection">
+                <p>Year:</p>
+                <input type="number" placeholder="2024">
+              </div>
+              <div class="inputSection">
+                <p>Month:</p>
+                <input type="number" placeholder="06">
+              </div>
             </div>
 
             <div class="inputRow">
               <button>⟳</button> <!-- revert to present -->
-              <p>Day:</p>
-              <input type="number" placeholder="19">
-              <p>Second:</p>
-              <input type="number" placeholder="103294">
+              <div class="inputSection">
+                <p>Day:</p>
+                <input type="number" placeholder="19">
+              </div>
+              <div class="inputSection">
+                <p>Second:</p>
+                <input type="number" placeholder="103294">
+              </div>
             </div>
 
           </div>
@@ -232,7 +237,7 @@
           <div style="height: 100%;" id="editor">
         </div>
         </div>
-        <button id="compileButton" style="font-size: 100%; text-align: left; justify-content: center; max-width: fit-content;" onclick="compileShaders()">&gt compile &lt</button>
+        <button id="compileButton" style="font-size: 100%; text-align: left; justify-content: center; max-width: fit-content;">&gt compile &lt</button>
         <p>iChannels go here</p>
       </div>
 

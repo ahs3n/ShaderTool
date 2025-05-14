@@ -238,7 +238,7 @@ export function setupEditor() {
 
     const observer = new ResizeObserver(entries => {
       clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
+      var resizeTimeout = setTimeout(() => {
           editor.layout();
         }, 100); // debounce
     });

@@ -172,22 +172,17 @@ input[type="range"]::-moz-range-thumb {
 
 .resSelector {
     color: inherit;
-    border: none; /* Remove the default border */
+    border: none;
     border-radius: 5%;
-    background: none; /* Remove default background */
-    font-size: 16px; /* Match font size with surrounding text */
-    resize: none; /* Optional: prevent resizing if desired */
+    background: none;
+    font-size: 16px;
+    resize: none;
     outline: none; /* Remove default focus outline */
     overflow:hidden;
     width: 4ch;
     height: 1em;
-    display: inline-block; /* Align with inline content */
-    vertical-align: bottom; /* Adjust vertical alignment */
-}
-
-.resSelector:focus {
-    border: 2px solid #777; /* Light up border color when focused */
-    border-radius: 10%;
+    display: inline-block;
+    vertical-align: bottom; 
 }
 
 #canvas {
