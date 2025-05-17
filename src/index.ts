@@ -263,9 +263,10 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     renderer = new Renderer(shaders);
 
     let start = performance.now() / 1000.0;
-    let lastTime = start;
+    let trueLastTime = start;
     let averageFPS = -1;
     let time: number;
+    let trueTime: number;
 
     let fpsCounterElem = document.getElementById("fpsCounter");
     let timeDisplayElem = document.getElementById("iTimeDisplay");
@@ -275,13 +276,25 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     setupEditor();
     setEditorValue(shaders.image);
 
+    function cancelAndUpdate(){
+        cancelAnimationFrame(animationFrameID);
+        if (!running) {
+            pauseShader();
+            animate();
+            pauseShader();
+        } else {
+            animate();
+        }
+    }
+
     function animate() {
+        trueTime = performance.now();
         time = performance.now() / 1000.0 - start + tOffset;
 
         renderer.draw(time, frameCount);
 
-        let deltaTime = performance.now() / 1000.0 - lastTime;
-        let fps = 1.0 / deltaTime;
+        let deltaTime = (performance.now() - trueLastTime)/1000.;
+        let fps = deltaTime==0?1e3:1.0 / deltaTime;
 
         if (averageFPS == -1 || averageFPS == Infinity) {
             averageFPS = fps;
@@ -291,9 +304,10 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 
         fpsCounterElem.innerText = `${averageFPS.toFixed(1)}`;
         timeDisplayElem.innerText = `${time.toFixed(2)}`;
+        UI.advanced.iTime.value = (time - iTimeMin) / (iTimeMax - iTimeMin) * precision;
 
-        lastTime = performance.now() / 1000.0;
         frameCount++;
+        trueLastTime = performance.now();
 
         // console.log("animate");
         // console.log(frameCount - animationFrameID);
@@ -328,14 +342,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         let compileButtonElem = document.getElementById("compileButton");
         let startTime = performance.now();
         renderer.compile_image(shaders.image);
-        cancelAnimationFrame(animationFrameID);
-        if (!running) {
-            pauseShader();
-            animate();
-            pauseShader();
-        } else {
-            animate();
-        }
+        cancelAndUpdate();
         compileButtonElem.innerText = `| Compiled in ${(performance.now() - startTime).toFixed(1)}ms. |`;
         setTimeout(() => {
             compileButtonElem.innerText = "> compile <";
@@ -380,17 +387,14 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         gl.canvas.height = y;
         gl.viewport(0,0, x,y);
         
-        cancelAnimationFrame(animationFrameID);
-        if (!running) {
-            pauseShader();
-            animate();
-            pauseShader();
-        } else {
-            animate();
-        }
+        cancelAndUpdate();
     }
 
     // globalThis.iTime = UI.advanced.iTime;
+    let iTimeMin = 0;
+    let iTimeMax = 60;
+    UI.advanced.iTimeMin.placeholder = iTimeMin;
+    UI.advanced.iTimeMax.placeholder = iTimeMax;
     
     ["input", "focusout"].forEach( t => {
         console.log(t);
@@ -399,18 +403,33 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 
         UI.advanced.iTimeMin.addEventListener(t, (e) => nic(e, t, _ => {
             let x = parseInt(UI.advanced.iTimeMin.value);
-            UI.advanced.iTime.min = x;
+            // UI.advanced.iTime.min = x;
+            iTimeMin = x;
             console.log("iTime min range:", x);
         }));
         
-        // UI.advanced.iTimeMax.addEventListener(t, (e) => nic(e, t, _ => {
-        //     let x = parseInt(UI.advanced.iTimeMax.value);
-        //     UI.advanced.iTime.max = x;
-        //     console.log("iTime max range:", x);
-        // }));
-        // WHY DOES THIS BREAK EVERYTHING
+        UI.advanced.iTimeMax.addEventListener(t, (e) => nic(e, t, _ => {
+            let x = parseInt(UI.advanced.iTimeMax.value);
+            // UI.advanced.iTime.max = x;
+            iTimeMax = x;
+            console.log("iTime max range:", x);
+        }));
     });
 
+    let precision = 1000;
+    UI.advanced.iTime.min = 0;
+    UI.advanced.iTime.max = precision;
+    UI.advanced.iTime.addEventListener("input", _ => {
+        let x = iTimeMin + (UI.advanced.iTime.value/precision)*(iTimeMax-iTimeMin); 
+            // implementation is correct and thus inverting max and min is allowed
+        tOffset = x - performance.now() / 1000.0 + start;
+        cancelAndUpdate();
+        
+        // console.log("iTime:",x);
+    });
+
+    // add function to set button state to enabled
+    // add functionality to cycle button
 
 
 }
