@@ -304,7 +304,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 
         fpsCounterElem.innerText = `${averageFPS.toFixed(1)}`;
         timeDisplayElem.innerText = `${time.toFixed(2)}`;
-        UI.advanced.iTime.value = (time - iTimeMin) / (iTimeMax - iTimeMin) * precision;
+        UI.advanced.iTime.value = (time - iTimeMin) / (iTimeMax - iTimeMin);
 
         frameCount++;
         trueLastTime = performance.now();
@@ -416,11 +416,11 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         }));
     });
 
-    let precision = 1000;
     UI.advanced.iTime.min = 0;
-    UI.advanced.iTime.max = precision;
+    UI.advanced.iTime.max = 1;
+    UI.advanced.iTime.step = 5e-4;
     UI.advanced.iTime.addEventListener("input", _ => {
-        let x = iTimeMin + (UI.advanced.iTime.value/precision)*(iTimeMax-iTimeMin); 
+        let x = iTimeMin + (UI.advanced.iTime.value)*(iTimeMax-iTimeMin); 
             // implementation is correct and thus inverting max and min is allowed
         tOffset = x - performance.now() / 1000.0 + start;
         cancelAndUpdate();
