@@ -237,10 +237,12 @@ export function setupEditor() {
     });
 
     const observer = new ResizeObserver(entries => {
-      clearTimeout(resizeTimeout);
+      try {
+        clearTimeout(resizeTimeout);
+      } catch { }
       var resizeTimeout = setTimeout(() => {
-          editor.layout();
-        }, 100); // debounce
+        editor.layout();
+      }, 100); // debounce
     });
     observer.observe(document.getElementById('editorCont'));
 
