@@ -170,6 +170,63 @@ class Renderer {
     prg_BufferD: WebGLProgram;
 };
 
+function validateNumericInput(event) {
+    event.target.value = event.target.value.replace(/[^0-9]/g, '');
+}
+
+function numericInputCallback(event, type, callback) {
+    console.log(type);
+    if (event.target.nodeName == 'TEXTAREA' && type == "input"){
+        if (event.target.value.includes("\n")){
+            validateNumericInput(event);
+            callback();
+        }
+        validateNumericInput(event);
+    } else {
+        validateNumericInput(event);
+        callback();
+    }
+}
+
+function nic(e,t,c){
+    numericInputCallback(e,t,c);
+}
+
+function buttonToggle(event, callback){ // passses toggled on/off into callback
+    if (!event.target.pressed){
+        event.target.pressed = true;
+        event.target.classList.add("buttonPressed");
+        callback(true);
+    } else {
+        event.target.pressed = false;
+        event.target.classList.remove("buttonPressed");
+        callback(false);
+    }
+}
+
+let boxes = [
+    document.getElementById('advancedBox'),
+    document.getElementById('archiveBox'),
+    document.getElementById('renderBox')
+];
+let boxSelectors = [
+    document.getElementById('advancedSelect'),
+    document.getElementById('archiveSelect'),
+    document.getElementById('renderSelect')
+];
+
+function boxSwitch(i){
+    boxes[i].style.display = boxes[i].style.display=='block'?'none':'block'; 
+    boxSelectors[i].children[0].innerHTML = boxes[i].style.display=='block'?'v':'>'; 
+        // Should be swapped in favour of system independent, and properly aligned, images
+    for (var x = 0; x < 3; x++){
+        if (boxes[x] != boxes[i]){
+        boxes[x].style.display = 'none';
+        boxSelectors[x].children[0].innerHTML = '>';
+        }
+    }
+}
+
 let running: boolean = true;
 let tOffset: number = 0;
 
@@ -207,14 +264,17 @@ function main() {
     UI.advanced.iTimeMin = document.getElementById("iTimeMin");
     UI.advanced.iTimeMax = document.getElementById("iTimeMax");
     UI.advanced.iTime = document.getElementById("iTime");
-    // iTimeLoop : null,
-    // iFrame : null,
-    // paintCalls : null,
-    // frameTimer : null,
+    UI.advanced.iTimeLoop = document.getElementById("iTimeLoop");
+    UI.advanced.iFrame = document.getElementById("iFrame");
+    UI.advanced.paintCalls = document.getElementById("paintCalls");
+    UI.advanced.frameTimer = document.getElementById("frameTimerToggle")
 
     UI.editor.compileButton = document.getElementById("compileButton");
 
-
+    
+    boxSelectors[0].addEventListener("click", _ => {boxSwitch(0)});
+    boxSelectors[1].addEventListener("click", _ => {boxSwitch(1)});
+    boxSelectors[2].addEventListener("click", _ => {boxSwitch(2)});
 
 
         // TODO: load shaders from shadertoy
@@ -272,6 +332,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     let timeDisplayElem = document.getElementById("iTimeDisplay");
     let animationFrameID: number;
     let frameCount: number = 0;
+    var loopTime = false;
 
     setupEditor();
     setEditorValue(shaders.image);
@@ -291,7 +352,12 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         trueTime = performance.now();
         time = performance.now() / 1000.0 - start + tOffset;
 
-        renderer.draw(time, frameCount);
+        var pCalls = UI.advanced.paintCalls.value;
+        if (!pCalls || pCalls < 1) pCalls = 1;
+        for (var i = 0; i < pCalls; i++) {
+            renderer.draw(time, frameCount);
+            frameCount++;
+        }
 
         let deltaTime = (performance.now() - trueLastTime)/1000.;
         let fps = deltaTime==0?1e3:1.0 / deltaTime;
@@ -305,8 +371,14 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         fpsCounterElem.innerText = `${averageFPS.toFixed(1)}`;
         timeDisplayElem.innerText = `${time.toFixed(2)}`;
         UI.advanced.iTime.value = (time - iTimeMin) / (iTimeMax - iTimeMin);
+        if (loopTime){
+            if (time > iTimeMax || time < iTimeMin){
+                setTime(iTimeMin);
+            }
+        }
+        UI.advanced.iFrame.placeholder = frameCount;
+        UI.advanced.iFrame.value = null;
 
-        frameCount++;
         trueLastTime = performance.now();
 
         // console.log("animate");
@@ -330,7 +402,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 
     function resetShader() {
         start = performance.now() / 1000.0;
-        tOffset = 0;
+        tOffset = loopTime?iTimeMin:0;
         averageFPS = -1;
         frameCount = 0;
         cancelAnimationFrame(animationFrameID);
@@ -349,28 +421,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         }, 1500);
     }
     UI.editor.compileButton.addEventListener("click", compileShaders);
-
-    function validateNumericInput(event) {
-        event.target.value = event.target.value.replace(/[^0-9]/g, '');
-    }
-
-    function numericInputCallback(event, type, callback) {
-        console.log(type);
-        if (event.target.nodeName == 'TEXTAREA' && type == "input"){
-            if (event.target.value.includes("\n")){
-                validateNumericInput(event);
-                callback();
-            }
-            validateNumericInput(event);
-        } else {
-            validateNumericInput(event);
-            callback();
-        }
-    }
-
-    function nic(e,t,c){
-        numericInputCallback(e,t,c);
-    }
     
     function resizeCanvas() {
         let x: number = parseInt(UI.screen.resX.value);
@@ -390,11 +440,15 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         cancelAndUpdate();
     }
 
+    function setTime(t){
+        tOffset = t - performance.now() / 1000.0 + start;
+    }
+
     // globalThis.iTime = UI.advanced.iTime;
     let iTimeMin = 0;
     let iTimeMax = 60;
-    UI.advanced.iTimeMin.placeholder = iTimeMin;
-    UI.advanced.iTimeMax.placeholder = iTimeMax;
+    UI.advanced.iTimeMin.value = iTimeMin;
+    UI.advanced.iTimeMax.value = iTimeMax;
     
     ["input", "focusout"].forEach( t => {
         console.log(t);
@@ -405,6 +459,8 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
             let x = parseInt(UI.advanced.iTimeMin.value);
             // UI.advanced.iTime.min = x;
             iTimeMin = x;
+            UI.advanced.iTime.click();
+
             console.log("iTime min range:", x);
         }));
         
@@ -412,24 +468,46 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
             let x = parseInt(UI.advanced.iTimeMax.value);
             // UI.advanced.iTime.max = x;
             iTimeMax = x;
+            UI.advanced.iTime.click();
+
             console.log("iTime max range:", x);
         }));
+        
+        UI.advanced.iFrame.addEventListener(t, (e) => nic(e,t, _ => {
+            if (running) pauseShader();
+            frameCount = UI.advanced.iFrame.value;
+        }));
     });
-
+    
     UI.advanced.iTime.min = 0;
     UI.advanced.iTime.max = 1;
     UI.advanced.iTime.step = 5e-4;
     UI.advanced.iTime.addEventListener("input", _ => {
         let x = iTimeMin + (UI.advanced.iTime.value)*(iTimeMax-iTimeMin); 
             // implementation is correct and thus inverting max and min is allowed
-        tOffset = x - performance.now() / 1000.0 + start;
+        setTime(x);
         cancelAndUpdate();
-        
-        // console.log("iTime:",x);
     });
+    
+    UI.advanced.iTimeLoop.addEventListener("click", (e) => {
+        buttonToggle(e, (x) => {
+            loopTime = x;
+        });
+    });
+    
+    UI.advanced.frameTimer.addEventListener("click", (e) => {
+        buttonToggle(e, (x) => {
+            console.log("toggle frame timer",x?"on":"off");
+        });
+    });
+    
+    // for paintcalls, when onchange && mousedown (aka probably used arrow buttons), set paint calls to next PoT (or bitshift existing int)
+    // on event, set variable corresponding to event to true, then every frame set both to false. If both are true then both events fired at the same time.
 
-    // add function to set button state to enabled
-    // add functionality to cycle button
+    // iMouse behaviour:
+    // xy: Default to 0,0. when mouse down, current mouse coordinates. When mouse up, last known mouse coordinates
+    // zw: Default to 0,0. coordinates of last click. If click was this frame, w is positive, otherwise negative. If mouse is held down, z is positive, otherwise negative
+    // inspect in shader by fabrice: https://www.shadertoy.com/view/llySRh
 
 
 }

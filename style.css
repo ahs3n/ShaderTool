@@ -66,10 +66,31 @@ button {
     padding: .5rem;
     color: var(--primary-txt-colour);
     background-color: var(--secondary-bg-colour);
+    transition: background-color 100ms;
 }
 
 button:hover {
     background-color: var(--secondary-txt-colour);
+    transition: background-color 100ms;
+}
+
+button:active {
+    background-color: var(--primary-bg-colour);
+    transition: background-color 100ms;
+}
+
+.buttonPressed {
+    background-color: var(--primary-theme-colour);
+    transition: background-color 100ms;
+}
+
+.buttonPressed:hover {
+    background-color: var(--secondary-theme-colour);
+    transition: background-color 100ms;
+}
+
+.buttonPressed:active {
+    background-color: var(--secondary-bg-colour);
     transition: background-color 100ms;
 }
 
@@ -292,7 +313,7 @@ a:hover {
     margin: -.5rem;
 }
 
-#mouseDown {
+.mouseButton {
     width: 100%;
 }
 

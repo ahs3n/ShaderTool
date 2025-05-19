@@ -43,17 +43,17 @@
 
           <div style="display: flex; justify-content: space-evenly; width: 100%; padding: .5rem 0">
             
-            <a id="advancedSelect" class="optionSelect" onclick="boxSwitch(0)">
+            <a id="advancedSelect" class="optionSelect">
               <p style="display:inline">></p>
               <p style="display:inline">Advanced</p>
             </a>
 
-            <a id="archiveSelect" class="optionSelect" onclick="boxSwitch(1)">
+            <a id="archiveSelect" class="optionSelect">
               <p style="display:inline">></p>
               <p style="display:inline">Archive</p>
             </a>
 
-            <a id="renderSelect" class="optionSelect" onclick="boxSwitch(2)">
+            <a id="renderSelect" class="optionSelect">
               <p style="display:inline">></p>
               <p style="display:inline">Render</p>
             </a>
@@ -71,21 +71,21 @@
               <input type="range" id="iTime">  <!-- min and max handled internally to keep slider smooth -->
               <div class="inputSection">
                 <input type="number" id="iTimeMax">
-                <button>⟳</button> <!-- This button is a toggle:when toggled on, it will be blue and time will loop in the specified range -->
+                <button id="iTimeLoop">⟳</button> <!-- This button is a toggle:when toggled on, it will be blue and time will loop in the specified range -->
               </div>
             </div>
             
             <div class="inputRow">
               <div class="inputSection">
                 <p>iFrame:</p>
-                <input type="number" placeholder="currentFrameByJS">
+                <input type="number" id="iFrame" placeholder="currentFrameByJS">
               </div>
               <div class="inputSection">
                 <p>Paint calls:</p>
-                <input type="number" placeholder="1" min="1">
+                <input type="number" placeholder="1" min="1" id="paintCalls">
               </div>
               <div class="inputSection">
-                <button>Frame Timer</button> <!-- This is a toggle -->
+                <button id="frameTimerToggle">Frame Timer</button> <!-- This is a toggle -->
               </div>
             </div>
 
@@ -94,7 +94,7 @@
               <div class="inputSection"></div>
             </div>
 
-            <div class="inputRow">  <!-- default to current data -->
+            <div class="inputRow">  <!-- revert to true data as soon as it exists -->
               <p>x:256</p>
               <p>y:512</p>
               <p>z:203</p>
@@ -112,7 +112,10 @@
             </div>
 
             <div class="inputRow">
-              <button id="mouseDown">Mouse Down</button> <!-- toggle -->
+              <button class="mouseButton" id="mouseDown">Mouse Down</button> <!-- toggle -->
+            </div>
+            <div class="inputRow">
+              <button class="mouseButton" id="mouseClick">Mouse Click</button>
             </div>
 
             <div class="inputRow">
@@ -157,22 +160,23 @@
 
             <div class="inputRow">
               <div class="inputSection">
-                <!--
+                
                 <p>Resolution:</p>
                 <input type="number" placeholder="800" min="1">
                 <p> x </p>
-                <input type="number" placeholder="640" min="1">-->
+                <input type="number" placeholder="640" min="1">
               </div>
-              <div class="inputSection"></div>
+              <div class="inputSection">
+                <button>
+                  Preview <!-- makes the screen resolution the size specified above, also button turns blue -->
+                </button>
+              </div>
             </div>
             <div class="inputRow">
               <div class="inputSection">
                 <p>Frame Rate:</p>
                 <input type="number" placeholder="60" min=".000001">
               </div>
-              <button>
-                Preview <!-- makes the screen resolution the size specified above, also button turns blue -->
-              </button>
             </div>
 
             <div class="inputRow">
@@ -180,19 +184,21 @@
                 <p>Frames:</p>
                 <input type="number" placeholder="360" min="1">
               </div>
-              <button>
-                Render
-              </button>
+              <div class="inputSection">
+                <p>Prefix:</p>
+                <input type="text" placeholder="img">
+              </div>
             </div>
-
+            
             <div class="inputRow">
               <div class="inputSection">
                 <p>Paint calls:</p>
                 <input type="number" placeholder="1" min="1">
               </div>
               <div class="inputSection">
-                <p>Prefix:</p>
-                <input type="text" placeholder="img">
+                <button>
+                  Render
+                </button>
               </div>
             </div>
 
@@ -242,32 +248,7 @@
       </div>
 
     </div>
-    
-    <script>
-      boxes = [
-        document.getElementById('advancedBox'),
-        document.getElementById('archiveBox'),
-        document.getElementById('renderBox')
-      ];
-      boxSelectors = [
-        document.getElementById('advancedSelect'),
-        document.getElementById('archiveSelect'),
-        document.getElementById('renderSelect')
-      ];
-
-      function boxSwitch(i){
-        boxes[i].style.display = boxes[i].style.display=='block'?'none':'block'; 
-        boxSelectors[i].children[0].innerHTML = boxes[i].style.display=='block'?'v':'>'; 
-          // Should be swapped in favour of system independent, and properly aligned, images
-        for (var x = 0; x < 3; x++){
-          if (boxes[x] != boxes[i]){
-            boxes[x].style.display = 'none';
-            boxSelectors[x].children[0].innerHTML = '>';
-          }
-        }
-      }
-    </script>
-    
+        
     <script id="vertex-shader" type="x-shader/x-vertex">
       #ifdef GL_ES
         precision highp float;
