@@ -82,7 +82,7 @@
               </div>
               <div class="inputSection">
                 <p>Paint calls:</p>
-                <input type="number" placeholder="1" min="1" id="paintCalls">
+                <input type="number" value="1" min="1" id="paintCalls">
               </div>
               <div class="inputSection">
                 <button id="frameTimerToggle">Frame Timer</button> <!-- This is a toggle -->
@@ -122,11 +122,11 @@
               <p>iDate:</p> <!-- default to current data -->
               <div class="inputSection">
                 <p>Year:</p>
-                <input type="number" placeholder="2024">
+                <input type="number" placeholder="2025">
               </div>
               <div class="inputSection">
                 <p>Month:</p>
-                <input type="number" placeholder="06">
+                <input type="number" placeholder="05">
               </div>
             </div>
 
@@ -248,18 +248,6 @@
       </div>
 
     </div>
-        
-    <script id="vertex-shader" type="x-shader/x-vertex">
-      #ifdef GL_ES
-        precision highp float;
-      #endif
-
-      attribute vec2 aPos_ndc;
-
-      void main() {
-        gl_Position = vec4(aPos_ndc, 0.0, 1.0);
-      }
-    </script>
 
     <script type="module" src="dist/index.js"></script>
     <script type="module" src="dist/editor.js"></script>

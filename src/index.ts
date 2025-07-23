@@ -36,14 +36,34 @@ class ShaderInfo {
     bufferD: string;
 }
 
+class Uniforms {
+    iResolution;           // viewport resolution (in pixels)
+    iTime;                 // shader playback time (in seconds)
+    iTimeDelta;            // render time (in seconds)
+    iFrameRate;            // shader frame rate
+    iFrame;                // shader playback frame
+    // iChannelTime[4];       // channel playback time (in seconds)
+    // iChannelResolution[4]; // channel resolution (in pixels)
+    iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+    // iChannel0..3;          // input channel. XX = 2D/Cube
+    iDate;                 // (year, month, day, time in seconds)
+}
+
 const baseFragmentShader = `
 #ifdef GL_ES
     precision highp float;
 #endif
 
-uniform vec2 iResolution;
-uniform float iTime;
-uniform int iFrame;
+uniform vec3      iResolution;           // viewport resolution (in pixels)
+uniform float     iTime;                 // shader playback time (in seconds)
+uniform float     iTimeDelta;            // render time (in seconds)
+uniform float     iFrameRate;            // shader frame rate
+uniform int       iFrame;                // shader playback frame
+// uniform float     iChannelTime[4];       // channel playback time (in seconds)
+// uniform vec3      iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4      iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+// uniform samplerXX iChannel0..3;          // input channel. XX = 2D/Cube
+// uniform vec4      iDate;                 // (year, month, day, time in seconds)
 
 /* INSERT SHADER SOURCE HERE */
 
@@ -78,7 +98,17 @@ class Renderer {
         }
         this.vertexShader = vert;
 
-        let vertSource = (document.getElementById("vertex-shader") as HTMLScriptElement)?.firstChild?.nodeValue;
+        let vertSource = `
+#ifdef GL_ES
+    precision highp float;
+#endif
+
+attribute vec2 aPos_ndc;
+
+void main() {
+    gl_Position = vec4(aPos_ndc, 0.0, 1.0);
+}
+`;
         if (!vertSource) {
             throw new Error();
         }
@@ -90,15 +120,31 @@ class Renderer {
         this.compile_image(shaders.image);
     }
 
-    draw(time: number, frame: number) {
+    draw() {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.fullscreenQuadVAO);
 
-        this.uniformF(this.prg_Image, "iTime", time);
-        this.uniformI(this.prg_Image, "iFrame", frame);
-        this.uniform2F(this.prg_Image, "iResolution", [gl.canvas.width, gl.canvas.height]);
+        this.uniform3F(this.prg_Image, "iResolution", uniforms.iResolution);
+        this.uniformF(this.prg_Image, "iTime", uniforms.iTime);
+        this.uniformF(this.prg_Image, "iTimeDelta", uniforms.iTimeDelta);
+        this.uniformF(this.prg_Image, "iFrameRate", uniforms.iFrameRate);
+        this.uniformI(this.prg_Image, "iFrame", uniforms.iFrame);
+
+        this.uniform4F(this.prg_Image, "iMouse", uniforms.iMouse);
+
+        // uniform vec3      iResolution;           // viewport resolution (in pixels)
+        // uniform float     iTime;                 // shader playback time (in seconds)
+        // uniform float     iTimeDelta;            // render time (in seconds)
+        // uniform float     iFrameRate;            // shader frame rate
+        // uniform int       iFrame;                // shader playback frame
+        // uniform float     iChannelTime[4];       // channel playback time (in seconds)
+        // uniform vec3      iChannelResolution[4]; // channel resolution (in pixels)
+        // uniform vec4      iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+        // uniform samplerXX iChannel0..3;          // input channel. XX = 2D/Cube
+        // uniform vec4      iDate;                 // (year, month, day, time in seconds)
+
         
         gl.useProgram(this.prg_Image);
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, 6);
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
     }
 
     compile_image(source: string) {
@@ -143,7 +189,23 @@ class Renderer {
             gl.uniform2fv(loc, value);
         }
     }
+    
+    uniform3F(prg: WebGLProgram, name: string, value: [number, number, number]) {
+        let loc = gl.getUniformLocation(prg, name);
+        if (loc != -1) {
+            gl.useProgram(prg);
+            gl.uniform3fv(loc, value);
+        }
+    }
 
+    uniform4F(prg: WebGLProgram, name: string, value: [number, number, number, number]) {
+        let loc = gl.getUniformLocation(prg, name);
+        if (loc != -1) {
+            gl.useProgram(prg);
+            gl.uniform4fv(loc, value);
+        }
+    }
+    
     uniformI(prg: WebGLProgram, name: string, value: number) {
         let loc = gl.getUniformLocation(prg, name);
         if (loc!= -1) {
@@ -157,6 +219,14 @@ class Renderer {
         if (loc!= -1) {
             gl.useProgram(prg);
             gl.uniform2iv(loc, value);
+        }
+    }
+    
+    uniform3I(prg: WebGLProgram, name: string, value: [number, number, number]) {
+        let loc = gl.getUniformLocation(prg, name);
+        if (loc!= -1) {
+            gl.useProgram(prg);
+            gl.uniform3iv(loc, value);
         }
     }
 
@@ -219,7 +289,7 @@ function boxSwitch(i){
     boxes[i].style.display = boxes[i].style.display=='block'?'none':'block'; 
     boxSelectors[i].children[0].innerHTML = boxes[i].style.display=='block'?'v':'>'; 
         // Should be swapped in favour of system independent, and properly aligned, images
-    for (var x = 0; x < 3; x++){
+    for (let x = 0; x < 3; x++){
         if (boxes[x] != boxes[i]){
         boxes[x].style.display = 'none';
         boxSelectors[x].children[0].innerHTML = '>';
@@ -232,6 +302,7 @@ let tOffset: number = 0;
 
 let shaders: ShaderInfo;
 let renderer: Renderer;
+let uniforms: Uniforms;
 
 let UI = {
     screen : {
@@ -253,6 +324,11 @@ let UI = {
         compileButton : null
     }
 }
+
+let time: number;
+let deltaTime: number;
+let frameCount: number = 0;
+let averageFPS: number = -1;
 
 function main() {
 
@@ -321,18 +397,16 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 }
 `);
     renderer = new Renderer(shaders);
+    uniforms = new Uniforms;
 
     let start = performance.now() / 1000.0;
     let trueLastTime = start;
-    let averageFPS = -1;
-    let time: number;
     let trueTime: number;
 
     let fpsCounterElem = document.getElementById("fpsCounter");
     let timeDisplayElem = document.getElementById("iTimeDisplay");
     let animationFrameID: number;
-    let frameCount: number = 0;
-    var loopTime = false;
+    let loopTime = false;
 
     setupEditor();
     setEditorValue(shaders.image);
@@ -352,15 +426,30 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
         trueTime = performance.now();
         time = performance.now() / 1000.0 - start + tOffset;
 
-        var pCalls = UI.advanced.paintCalls.value;
+        let pCalls = UI.advanced.paintCalls.value;
         if (!pCalls || pCalls < 1) pCalls = 1;
-        for (var i = 0; i < pCalls; i++) {
-            renderer.draw(time, frameCount);
+        for (let i = 0; i < pCalls; i++) {
+            uniforms.iResolution = [gl.canvas.width, gl.canvas.height, 1.];
+            uniforms.iTime = time;
+            uniforms.iTimeDelta = deltaTime;
+            uniforms.iFrameRate = averageFPS;
+            uniforms.iFrame = frameCount;
+
+            uniforms.iMouse = [1,1,1,1];
+            // iMouse behaviour:
+            // xy: Default to 0,0. when mouse down, current mouse coordinates. When mouse up, last known mouse coordinates
+            // zw: Default to 0,0. coordinates of last click. If click was this frame, w is positive, otherwise negative. If mouse is held down, z is positive, otherwise negative
+            // inspect in shader by fabrice: https://www.shadertoy.com/view/llySRh
+
+
+            renderer.draw();
             frameCount++;
         }
 
-        let deltaTime = (performance.now() - trueLastTime)/1000.;
-        let fps = deltaTime==0?1e3:1.0 / deltaTime;
+        deltaTime = (performance.now() - trueLastTime)/1000.;
+        let fps = deltaTime==0?1e5:1.0 / deltaTime;
+        globalThis.deltaTime = deltaTime;
+
 
         if (averageFPS == -1 || averageFPS == Infinity) {
             averageFPS = fps;
@@ -411,14 +500,19 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     UI.screen.resetButton.addEventListener("click", resetShader);
 
     function compileShaders() {
-        let compileButtonElem = document.getElementById("compileButton");
-        let startTime = performance.now();
-        renderer.compile_image(shaders.image);
-        cancelAndUpdate();
-        compileButtonElem.innerText = `| Compiled in ${(performance.now() - startTime).toFixed(1)}ms. |`;
-        setTimeout(() => {
-            compileButtonElem.innerText = "> compile <";
-        }, 1500);
+        try {
+            let startTime = performance.now();
+            renderer.compile_image(shaders.image);
+            cancelAndUpdate();
+            UI.editor.compileButton.innerText = `| Compiled in ${(performance.now() - startTime).toFixed(1)}ms. |`;
+        } catch {
+            UI.editor.compileButton.innerText = `| Compile Error |`;
+            running = false;
+        } finally {
+            setTimeout(() => {
+                UI.editor.compileButton.innerText = "> compile <";
+            }, 1500);
+        }
     }
     UI.editor.compileButton.addEventListener("click", compileShaders);
     
@@ -503,11 +597,35 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     
     // for paintcalls, when onchange && mousedown (aka probably used arrow buttons), set paint calls to next PoT (or bitshift existing int)
     // on event, set variable corresponding to event to true, then every frame set both to false. If both are true then both events fired at the same time.
+    let pCallsChanged = false, pCallsMUp = false, pCallsLast;
+    function updateLoop(){
+        if (pCallsChanged && pCallsMUp){ // this implementation is buggy. If you can 1. Notice the bug and 2. figure out a solution, feel free to make a PR with the improvement and a demo of it working
+            if (UI.advanced.paintCalls.value > pCallsLast){
+                console.log("up");
+                UI.advanced.paintCalls.value--;
+                UI.advanced.paintCalls.value = Math.pow(2, Math.ceil(Math.log2(UI.advanced.paintCalls.value)));
+                UI.advanced.paintCalls.value = UI.advanced.paintCalls.value << 1;
+            } else if (UI.advanced.paintCalls.value < pCallsLast){
+                console.log("dn");
+                UI.advanced.paintCalls.value++;
+                UI.advanced.paintCalls.value = Math.pow(2, Math.floor(Math.log2(UI.advanced.paintCalls.value)));
+                UI.advanced.paintCalls.value = UI.advanced.paintCalls.value >> 1;
+            }
+            pCallsLast = UI.advanced.paintCalls.value;
+        }
+        pCallsChanged = false;
+        pCallsMUp = false;
+        
+        requestAnimationFrame(updateLoop);
+    }
+    updateLoop();
 
-    // iMouse behaviour:
-    // xy: Default to 0,0. when mouse down, current mouse coordinates. When mouse up, last known mouse coordinates
-    // zw: Default to 0,0. coordinates of last click. If click was this frame, w is positive, otherwise negative. If mouse is held down, z is positive, otherwise negative
-    // inspect in shader by fabrice: https://www.shadertoy.com/view/llySRh
+    UI.advanced.paintCalls.addEventListener("change", _ => {
+        pCallsChanged = true;
+    });
+    UI.advanced.paintCalls.addEventListener("mouseup", _ => {
+        pCallsMUp = true;
+    });
 
 
 }
